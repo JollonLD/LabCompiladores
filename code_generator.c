@@ -24,6 +24,16 @@ static char* novoLabel(void) {
     return nomeLabel;
 }
 
+static char* gerarOffsetBytes(char* indice){
+    if (indice == NULL) 
+        return NULL;
+    
+    char* offset = novoTemporario();
+    printf("%s = %s * 4\n", offset, indice);
+    
+    return offset;
+}
+
 /* Gera código para expressões e retorna o temporário onde o resultado está armazenado */
 static char* gerarExpressao(TreeNode* no) {
     char* temp;
@@ -95,8 +105,9 @@ static char* gerarExpressao(TreeNode* no) {
         if (no->kind.var.varKind == KIND_ARRAY && no->child[0] != NULL) {
             // Acesso a array com índice
             char* indice = gerarExpressao(no->child[0]);
+            char* offset = gerarOffsetBytes(indice);
             temp = novoTemporario();
-            printf("%s = %s[%s]\n", temp, no->kind.var.attr.name, indice);
+            printf("%s = %s[%s]\n", temp, no->kind.var.attr.name, offset);
             return temp;
         } else {
             // Variável simples

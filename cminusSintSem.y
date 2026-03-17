@@ -13,6 +13,12 @@
 
     void yyerror(ParserContext *ctx, const char *s);
 
+#ifdef _WIN32
+#define STRTOK_REENTRANT(str, delim, saveptr) strtok_s((str), (delim), (saveptr))
+#else
+#define STRTOK_REENTRANT(str, delim, saveptr) strtok_r((str), (delim), (saveptr))
+#endif
+
     /* Traduz nomes de tokens para mensagens amigáveis */
     const char* translate_token(const char *token) {
         if (strcmp(token, "SEMI") == 0) return "';'";
@@ -1597,7 +1603,7 @@ void yyerror(ParserContext *ctx, const char *s) {
                 char expected_translated[1024] = "";
                 char *token_copy = strdup(expected_raw);
                 char *saveptr = NULL;
-                char *token = strtok_r(token_copy, " ", &saveptr);
+                char *token = STRTOK_REENTRANT(token_copy, " ", &saveptr);
                 int first = 1;
                 int count = 0;
 
@@ -1611,7 +1617,7 @@ void yyerror(ParserContext *ctx, const char *s) {
                         first = 0;
                         count++;
                     }
-                    token = strtok_r(NULL, " ", &saveptr);
+                    token = STRTOK_REENTRANT(NULL, " ", &saveptr);
                 }
 
                 fprintf(stderr, "ERRO SINTATICO: token inesperado %s, esperado %s - LINHA: %d\n",
