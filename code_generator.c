@@ -48,7 +48,7 @@ static char* gerarExpressao(TreeNode* no) {
         switch (no->kind.exp) {
             case CONSTK:
                 temp = novoTemporario();
-                printf("(LOAD, $%s, %d, _)\n", temp, no->kind.var.attr.val);
+                printf("(LOAD_CONST, $%s, %d, _)\n", temp, no->kind.var.attr.val);
                 return temp;
 
             case IDK: 
@@ -136,7 +136,7 @@ static void gerarComando(TreeNode* no) {
                 labelFalso = novoLabel();
                 labelFim = novoLabel();
 
-                printf("IF_FALSE, %s, %s, _)\n", teste, labelFalso);
+                printf("(IF_FALSE, %s, %s, _)\n", teste, labelFalso);
                 gerarComando(no->child[1]);
 
                 if (no->child[2] != NULL) {
@@ -263,7 +263,7 @@ static void gerarComandoExpressao(TreeNode* no) {
                             printf("%s[%s] = %s\n", no->child[0]->kind.var.attr.name,
                                    indice, valor);
                         } else {
-                            printf("(LOAD, %s, %s, _)\n", no->child[0]->kind.var.attr.name, valor);
+                            printf("(LOAD_VAR, %s, %s, _)\n", no->child[0]->kind.var.attr.name, valor);
                         }
                     }
                 }

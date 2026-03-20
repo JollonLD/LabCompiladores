@@ -821,6 +821,16 @@ static const char* get_op_symbol(int op) {
         default: return "?";
     }
 }
+/* Função para pegar qual o Tipo para Declaração de Var, Array e Function */
+static const char* get_type_string(TipoVar type) {
+    switch (type) {
+        case TYPE_INT:       return "int";
+        case TYPE_VOID:      return "void";
+        case TYPE_INT_ARRAY: return "int[]";
+        case TYPE_ERROR:     return "error";
+        default:             return "?";
+    }
+}
 
 /* Função recursiva para gerar GraphViz DOT */
 static int printTreeDOT_simplified(DotContext *ctx, TreeNode *tree, int parent_id) {
@@ -837,18 +847,16 @@ static int printTreeDOT_simplified(DotContext *ctx, TreeNode *tree, int parent_i
     if (tree->nodekind == STMTK) {
         switch(tree->kind.stmt) {
             case INTEGERK:
+                snprintf(label, sizeof(label), "int");
+                color = "lightblue";
+                shape = "box";
+                break;
 
             case VOIDK:
-                /* Pula nós de tipo */
-                if (tree->child[0]) {
-                    printTreeDOT_simplified(ctx, tree->child[0], parent_id);
-                }
-
-                if (tree->sibling) {
-                    printTreeDOT_simplified(ctx, tree->sibling, parent_id);
-                }
-                
-                return -1; /* Indica que pulou */
+                snprintf(label, sizeof(label), "void");
+                color = "lightblue";
+                shape = "box";
+                break;
 
             case IFK:
                 snprintf(label, sizeof(label), "IF");
