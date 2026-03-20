@@ -35,7 +35,7 @@
 /* "%code requires" blocks.  */
 
 /* Line 1676 of yacc.c  */
-#line 55 "cminusSintSem.y"
+#line 61 "cminusSintSem.y"
 
     #include "parser_context.h"
 
@@ -173,7 +173,7 @@ typedef union YYSTYPE
 {
 
 /* Line 1676 of yacc.c  */
-#line 145 "cminusSintSem.y"
+#line 151 "cminusSintSem.y"
 
     int ival;
     char *id;
