@@ -876,19 +876,10 @@ static int printTreeDOT_simplified(DotContext *ctx, TreeNode *tree, int parent_i
                 break;
 
             case COMPK:
-                /* Pula compound statements, processa filhos e irmãos */
-                for (int i = 0; i < MAXCHILDREN; i++) {
-                    if (tree->child[i] != NULL) {
-                        printTreeDOT_simplified(ctx, tree->child[i], parent_id);
-                    }
-                }
-
-                /* Processa irmãos mesmo pulando o nó */
-                if (tree->sibling) {
-                    printTreeDOT_simplified(ctx, tree->sibling, parent_id);
-                }
-
-                return -1; /* Indica que pulou */
+                snprintf(label, sizeof(label), "{}");
+                color = "lightcoral";
+                shape = "box";
+                break;
         }
     } 
     else if (tree->nodekind == VARK) {
@@ -972,20 +963,35 @@ static int printTreeDOT_simplified(DotContext *ctx, TreeNode *tree, int parent_i
     
     /* Liga ao pai */
     if (parent_id >= 0) {
-        fprintf(fp, "  node%d -> node%d;\n", parent_id, current_id);
+        fprintf(fp, "  node%d -> node%d [weight=10];\n", parent_id, current_id);
+    }
+
+    /* Visita irmãos */
+    if (tree->sibling != NULL) {
+        int sib_id = printTreeDOT_simplified(ctx, tree->sibling, -1);
+        
+        /* força os dois no mesmo nível */
+        fprintf(fp, "  { rank=same; node%d; node%d; }\n", current_id, sib_id);
+        
+        /* aresta de irmão sem influenciar hierarquia vertical */
+        fprintf(fp, "  node%d -> node%d [style=dashed, color=gray, constraint=false, minlen=3];\n", current_id, sib_id);
+        
+        /* ancora o irmão no mesmo pai para estabilizar lado a lado */
+        if (parent_id >= 0) {
+            fprintf(fp, "  node%d -> node%d [style=invis, weight=20];\n", parent_id, sib_id);
+        }
     }
 
     /* Processa filhos */
     for (int i = 0; i < MAXCHILDREN; i++) {
-        if (tree->child[i] != NULL) {
-            printTreeDOT_simplified(ctx, tree->child[i], current_id);
+        TreeNode *filho = tree->child[i];
+        
+        if (filho != NULL) {
+            /* cria primeiro filho ligado ao pai */
+            printTreeDOT_simplified(ctx, filho, current_id); 
         }
     }
-    
-    /* Processa irmãos */
-    if (tree->sibling != NULL) {
-        printTreeDOT_simplified(ctx, tree->sibling, parent_id);
-    }
+
 
     return current_id;
 }
@@ -1010,10 +1016,16 @@ void printTreeDOT(TreeNode *tree, const char *filename) {
     fprintf(fp, "  \n");
     fprintf(fp, "  // AST Simplificada (Abstract Syntax Tree)\n");
     fprintf(fp, "  \n");
-    
-    /* Gera a árvore */
+
+
     printTreeDOT_simplified(&ctx, tree, -1);
-    
+
+    // Verificar irmao do nó raiz
+    /* printTreeSimplified(tree->sibling, 0); */
+
+    /* Gera a árvore */
+    /* printTreeDOT_simplified(&ctx, tree, -1); */
+
     /* Rodapé */
     fprintf(fp, "}\n");
     fclose(fp);
@@ -1028,7 +1040,7 @@ void printTreeDOT(TreeNode *tree, const char *filename) {
 void printTreeSimplified(TreeNode *tree, int indent) {
     if (tree == NULL) return;
 
-    for (int i = 0; i < indent; i++) printf(" ");
+    for (int i = 0; i < indent; i++) printf("\t");
 
     if (tree->nodekind == STMTK) {
         switch (tree->kind.stmt) {

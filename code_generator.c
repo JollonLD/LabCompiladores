@@ -8,6 +8,10 @@
 static int contadorTemporarios = 0;
 static int contadorLabels = 0;
 
+/* Nome da Função Atual para salvar contexto */
+static const char* funcaoAtual = NULL;
+
+
 static char* gerarExpressao(TreeNode* no);
 static void gerarComando(TreeNode* no);
 static void gerarComandoExpressao(TreeNode* no);
@@ -177,6 +181,14 @@ static void gerarComando(TreeNode* no) {
                     TreeNode* declaracao = no->child[0];
                     while (declaracao != NULL) {
                         gerarComando(declaracao);
+                        if (declaracao->nodekind == STMTK && declaracao->child[0] != NULL && declaracao->child[0]->nodekind == VARK &&
+                            declaracao->child[0]->kind.var.attr.name != NULL) {
+                            
+                            const char* nomeFunc = (funcaoAtual != NULL) ? funcaoAtual : "global";
+                            const char* nomeVar  = declaracao->child[0]->kind.var.attr.name;
+                            
+                            printf("(ALOCA_MEM, %s, %s, _)\n", nomeFunc, nomeVar);
+                        }
                         declaracao = declaracao->sibling;
                     }
                 }
@@ -204,6 +216,10 @@ static void gerarComando(TreeNode* no) {
                     if (noIdentificador->kind.var.varKind == KIND_FUNC) {
                         // Declaração de função
                         char* tipofunc = (no->kind.stmt == INTEGERK) ? "int" : "void";
+                        
+                        const char* funcaoAnterior = funcaoAtual;
+                        funcaoAtual = noIdentificador->kind.var.attr.name;
+                        
                         printf("(FUNC, %s, %s, _)\n", tipofunc, noIdentificador->kind.var.attr.name);
 
                         // Processa parâmetros (child[0] do nó de função)
@@ -211,18 +227,20 @@ static void gerarComando(TreeNode* no) {
                             TreeNode* parametro = noIdentificador->child[0];
                             while (parametro != NULL) {
                                 if (parametro->nodekind == STMTK && parametro->child[0] != NULL) {
-                                    printf("(PARAM, %s, _, _)\n", parametro->child[0]->kind.var.attr.name);
+                                    printf("(PARAM, %s, %s, _)\n", parametro->child[0]->kind.var.attr.name, funcaoAtual);
                                 }
                                 parametro = parametro->sibling;
                             }
                         }
-
                         // Processa corpo da função (child[1] do nó de função)
                         if (noIdentificador->child[1] != NULL) {
                             gerarComando(noIdentificador->child[1]);
                         }
 
-                        printf("(END_FUNC, _, _, _)\n");
+                        printf("(END_FUNC, %s, _, _)\n", funcaoAtual);
+                        
+                        funcaoAtual = funcaoAnterior;
+
                     } else if (noIdentificador->kind.var.varKind == KIND_ARRAY &&
                                noIdentificador->kind.var.acesso == DECLK) {
                         // Declaração de array
