@@ -832,18 +832,17 @@ static const char* get_type_string(TipoVar type) {
     }
 }
 
-/* Função recursiva para gerar GraphViz DOT */
-static int printTreeDOT_simplified(DotContext *ctx, TreeNode *tree, int parent_id) {
+static int printNodeDOT_simplified(DotContext *ctx, TreeNode *tree) {
     if (tree == NULL) return -1;
-    
+
     int current_id = ctx->node_counter++;
     FILE *fp = ctx->fp;
-    
-    /* Define cor e forma do nó */
+
+    /* Define cor e forma do no */
     const char *shape = "box";
     const char *color = "lightblue";
     char label[256] = "";
-    
+
     if (tree->nodekind == STMTK) {
         switch(tree->kind.stmt) {
             case INTEGERK:
@@ -851,149 +850,152 @@ static int printTreeDOT_simplified(DotContext *ctx, TreeNode *tree, int parent_i
                 color = "lightblue";
                 shape = "box";
                 break;
-
             case VOIDK:
                 snprintf(label, sizeof(label), "void");
                 color = "lightblue";
                 shape = "box";
                 break;
-
             case IFK:
                 snprintf(label, sizeof(label), "IF");
                 color = "orange";
                 shape = "diamond";
                 break;
-
             case WHILEK:
                 snprintf(label, sizeof(label), "WHILE");
                 color = "orange";
                 shape = "diamond";
                 break;
-
             case RETURNK:
                 snprintf(label, sizeof(label), "RETURN");
                 color = "pink";
                 break;
-
             case COMPK:
                 snprintf(label, sizeof(label), "{}");
                 color = "lightcoral";
                 shape = "box";
                 break;
         }
-    } 
-    else if (tree->nodekind == VARK) {
+    } else if (tree->nodekind == VARK) {
         char *esc_name = escape_label(tree->kind.var.attr.name);
-        
         if (tree->kind.var.varKind == KIND_FUNC) {
             snprintf(label, sizeof(label), "Function\\n%s", esc_name);
             color = "gold";
             shape = "ellipse";
-        } 
-        else if (tree->kind.var.varKind == KIND_ARRAY) {
+        } else if (tree->kind.var.varKind == KIND_ARRAY) {
             if (tree->kind.var.acesso == DECLK) {
                 snprintf(label, sizeof(label), "Array\\n%s", esc_name);
                 color = "lightgreen";
-            } 
-            else {
+            } else {
                 snprintf(label, sizeof(label), "%s[]", esc_name);
                 color = "lightyellow";
             }
-        } 
-        else {
+        } else {
             if (tree->kind.var.acesso == DECLK) {
                 snprintf(label, sizeof(label), "Var\\n%s", esc_name);
                 color = "lightgreen";
-            } 
-            else {
+            } else {
                 snprintf(label, sizeof(label), "%s", esc_name);
                 color = "lightyellow";
             }
         }
-
         free(esc_name);
-    } 
-    else if (tree->nodekind == EXPK) {
+    } else if (tree->nodekind == EXPK) {
         switch (tree->kind.exp) {
             case OPK:
                 snprintf(label, sizeof(label), "%s", get_op_symbol(tree->op));
                 color = "lavender";
                 shape = "circle";
                 break;
-
             case CONSTK:
                 snprintf(label, sizeof(label), "%d", tree->kind.var.attr.val);
                 color = "lightpink";
                 shape = "circle";
                 break;
-
             case IDK: {
                 char *esc_name = escape_label(tree->kind.var.attr.name);
                 snprintf(label, sizeof(label), "%s", esc_name);
                 free(esc_name);
                 color = "lightyellow";
+                break;
             }
-            break;
-
             case ASSIGNK:
                 snprintf(label, sizeof(label), "=");
                 color = "khaki";
                 shape = "circle";
                 break;
-
             case CALLK: {
                 char *esc_name = escape_label(tree->kind.var.attr.name);
                 snprintf(label, sizeof(label), "%s()", esc_name);
                 free(esc_name);
                 color = "peachpuff";
+                break;
             }
-            break;
-
             case VECTORK: {
                 char *esc_name = escape_label(tree->kind.var.attr.name);
                 snprintf(label, sizeof(label), "%s[]", esc_name);
                 free(esc_name);
                 color = "lightcyan";
+                break;
             }
-            break;
         }
     }
 
     fprintf(fp, "  node%d [label=\"%s\", shape=%s, style=\"filled\", fillcolor=%s];\n", current_id, label, shape, color);
-    
-    /* Liga ao pai */
-    if (parent_id >= 0) {
-        fprintf(fp, "  node%d -> node%d [weight=10];\n", parent_id, current_id);
-    }
-
-    /* Visita irmãos */
-    if (tree->sibling != NULL) {
-        int sib_id = printTreeDOT_simplified(ctx, tree->sibling, -1);
-        
-        /* força os dois no mesmo nível */
-        fprintf(fp, "  { rank=same; node%d; node%d; }\n", current_id, sib_id);
-        
-        /* aresta de irmão sem influenciar hierarquia vertical */
-        fprintf(fp, "  node%d -> node%d [style=dashed, color=gray, constraint=false, minlen=3];\n", current_id, sib_id);
-        
-        /* ancora o irmão no mesmo pai para estabilizar lado a lado */
-        if (parent_id >= 0) {
-            fprintf(fp, "  node%d -> node%d [style=invis, weight=20];\n", parent_id, sib_id);
-        }
-    }
-
-    /* Processa filhos */
-    for (int i = 0; i < MAXCHILDREN; i++) {
-        TreeNode *filho = tree->child[i];
-        
-        if (filho != NULL) {
-            /* cria primeiro filho ligado ao pai */
-            printTreeDOT_simplified(ctx, filho, current_id); 
-        }
-    }
-
-
     return current_id;
+}
+
+static void printSiblingChainDOT_simplified(DotContext *ctx, TreeNode *first, int parent_id) {
+    if (first == NULL) return;
+
+    FILE *fp = ctx->fp;
+    int ids[512];
+    int count = 0;
+    TreeNode *cur = first;
+
+    /* Cria todos os nos da cadeia de irmaos desse nivel */
+    while (cur != NULL && count < 512) {
+        ids[count++] = printNodeDOT_simplified(ctx, cur);
+        cur = cur->sibling;
+    }
+
+    /* Liga pai -> cada irmao (vertical) */
+    if (parent_id >= 0) {
+        fprintf(fp, "  node%d -> node%d [weight=10];\n", parent_id, ids[0]);
+        for (int i = 1; i < count; i++) {
+            fprintf(fp, "  node%d -> node%d [style=invis, weight=10];\n", parent_id, ids[i]);
+        }
+    }
+
+    /* Irmaos no mesmo rank e ligados com aresta dashed */
+    if (count > 1) {
+        fprintf(fp, "  { rank=same; ");
+        for (int i = 0; i < count; i++) {
+            fprintf(fp, "node%d; ", ids[i]);
+        }
+        fprintf(fp, "}\n");
+
+        for (int i = 0; i < count - 1; i++) {
+            fprintf(fp, "  node%d -> node%d [style=dashed, color=gray, constraint=false, minlen=2];\n", ids[i], ids[i + 1]);
+        }
+    }
+
+    /* Processa ate 3 filhos de cada no dessa cadeia */
+    cur = first;
+    for (int i = 0; i < count; i++, cur = cur->sibling) {
+        for (int c = 0; c < MAXCHILDREN; c++) {
+            if (cur->child[c] != NULL) {
+                printSiblingChainDOT_simplified(ctx, cur->child[c], ids[i]);
+            }
+        }
+    }
+}
+
+/* Mantido para compatibilidade com chamadas antigas */
+static int printTreeDOT_simplified(DotContext *ctx, TreeNode *tree, int parent_id) {
+    if (tree == NULL) return -1;
+    int before = ctx->node_counter;
+    printSiblingChainDOT_simplified(ctx, tree, parent_id);
+    return before;
 }
 
 /* Função principal para gerar arquivo DOT */
@@ -1018,13 +1020,7 @@ void printTreeDOT(TreeNode *tree, const char *filename) {
     fprintf(fp, "  \n");
 
 
-    printTreeDOT_simplified(&ctx, tree, -1);
-
-    // Verificar irmao do nó raiz
-    /* printTreeSimplified(tree->sibling, 0); */
-
-    /* Gera a árvore */
-    /* printTreeDOT_simplified(&ctx, tree, -1); */
+    printSiblingChainDOT_simplified(&ctx, tree, -1);
 
     /* Rodapé */
     fprintf(fp, "}\n");
