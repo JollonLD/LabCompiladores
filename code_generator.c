@@ -28,14 +28,41 @@ static char* novoLabel(void) {
     return nomeLabel;
 }
 
-static char* gerarOffsetBytes(char* indice){
+// Função para que seja feito a atribuição de um vetor para uma variável
+static char* assignVetor(char* indice, char* vetor){
     if (indice == NULL) 
         return NULL;
     
-    char* offset = novoTemporario();
-    printf("(MULT, $%s, %s, 4)\n", offset, indice);
+    char* temp1 = novoTemporario();
+    char* temp2 = novoTemporario();
+    char* temp3 = novoTemporario();
+    printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, indice, temp1);
+    printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, vetor, temp2);
+    printf("(ADD, %s, %s, %s)\n", temp1, temp2, temp3);
     
-    return offset;
+    return temp3;
+}
+
+// Função para gerar salto condicional If-else
+static void gerarCondicao(TreeNode* condicao, char* label){
+    char* operador;
+    char* esq = condicao->child[0]->kind.var.attr.name;
+    char* dir = condicao->child[1]->kind.var.attr.name;
+
+    // Inverte operador do tipo IFFALSE
+    switch (condicao->op){
+        case LT:      operador = "BGT"; break;
+        case LE:      operador = "BGE"; break;
+        case GT:      operador = "BLT"; break;
+        case GE:      operador = "BLE"; break;
+        case EQ:      operador = "BNE"; break;
+        case NE:      operador = "BEQ"; break;
+        
+        default:      operador = "?"; break;
+    }
+
+    printf("(%s, %s, %s, %s)\n", operador, esq, dir, label);
+
 }
 
 /* Gera código para expressões e retorna o temporário onde o resultado está armazenado */
@@ -52,7 +79,7 @@ static char* gerarExpressao(TreeNode* no) {
         switch (no->kind.exp) {
             case CONSTK:
                 temp = novoTemporario();
-                printf("(LOAD_CONST, $%s, %d, _)\n", temp, no->kind.var.attr.val);
+                printf("(LOAD_CONST, $%s, %d, ___)\n", temp, no->kind.var.attr.val);
                 return temp;
 
             case IDK: 
@@ -76,8 +103,8 @@ static char* gerarExpressao(TreeNode* no) {
                     case NE:      operador = "BNE"; break;
                     default:      operador = "?"; break;
                 }
-
-                printf("(%s, $%s, %s, %s)\n", operador, temp, esquerda, direita);
+                // add RS, RT, RD
+                printf("(%s, $%s, %s, %s)\n", operador, esquerda, direita, temp);
                 return temp;
 
             case CALLK: 
@@ -88,7 +115,7 @@ static char* gerarExpressao(TreeNode* no) {
                     // Processa argumentos
                     while (argumento != NULL) {
                         char* tempArg = gerarExpressao(argumento);
-                        printf("(PARAM, $%s, _, _)\n", tempArg);
+                        printf("(PARAM, $%s, ___, ___)\n", tempArg);
                         numArgumentos++;
                         argumento = argumento->sibling;
                     }
@@ -109,9 +136,9 @@ static char* gerarExpressao(TreeNode* no) {
         if (no->kind.var.varKind == KIND_ARRAY && no->child[0] != NULL) {
             // Acesso a array com índice
             char* indice = gerarExpressao(no->child[0]);
-            char* offset = gerarOffsetBytes(indice);
-            temp = novoTemporario();
-            printf("%s = %s[%s]\n", temp, no->kind.var.attr.name, offset);
+            char* vetor = no->kind.var.attr.name;
+            temp = assignVetor(indice, vetor);
+
             return temp;
         } else {
             // Variável simples
@@ -136,22 +163,27 @@ static void gerarComando(TreeNode* no) {
     if (no->nodekind == STMTK) {
         switch (no->kind.stmt) {
             case IFK: // if ou if-else
-                teste = gerarExpressao(no->child[0]);
+                // no->child[0] é a condição
+                // teste = gerarExpressao(no->child[0]);
                 labelFalso = novoLabel();
                 labelFim = novoLabel();
 
-                printf("(IF_FALSE, %s, %s, _)\n", teste, labelFalso);
+                // monta condição 
+                gerarCondicao(no->child[0], labelFalso);
+                // monta codigo dentro
                 gerarComando(no->child[1]);
-
+                
+                // Tem else
                 if (no->child[2] != NULL) {
-                    // Tem else
-                    printf("(GOTO, %s, _, _)\n", labelFim);
-                    printf("(LABEL, %s, _, _)\n", labelFalso);
+                    // salto para Fim dentro do If
+                    printf("(JUMP, %s, ___, ___)\n", labelFim);
+                    // começo do Else
+                    printf("(LABEL, %s, ___, ___)\n", labelFalso);
                     gerarComando(no->child[2]);
-                    printf("(LABEL, %s, _, _)\n", labelFim);
+                    printf("(LABEL, %s, ___, ___)\n", labelFim);
                 } else {
                     // Sem else
-                    printf("(LABEL, %s, _, _)\n", labelFalso);
+                    printf("(LABEL, %s, ___, ___)\n", labelFalso);
                 }
                 break;
 
@@ -159,36 +191,29 @@ static void gerarComando(TreeNode* no) {
                 labelInicio = novoLabel();
                 labelFim = novoLabel();
 
-                printf("(LABEL, %s, _, _)\n", labelInicio);
+                printf("(LABEL, %s, ___, ___)\n", labelInicio);
                 teste = gerarExpressao(no->child[0]);
-                printf("(IF_FALSE, %s, %s, _)\n", teste, labelFim);
+                printf("(IF_FALSE, %s, %s, ___)\n", teste, labelFim);
                 gerarComando(no->child[1]);
-                printf("(GOTO, %s, _, _)\n", labelInicio);
-                printf("(LABEL, %s, _, _)\n", labelFim);
+                printf("(JUMP, %s, ___, ___)\n", labelInicio);
+                printf("(LABEL, %s, ___, ___)\n", labelFim);
                 break;
 
             case RETURNK: // Return
                 if (no->child[0] != NULL) {
                     valor = gerarExpressao(no->child[0]);
-                    printf("(RETURN, $%s, _, _)\n", valor);
+                    printf("(RETURN, $%s, ___, ___)\n", valor);
                 } else {
-                    printf("(RETURN, _, _, _)\n");
+                    printf("(RETURN, ___, ___, ___)\n");
                 }
                 break;
 
             case COMPK: // Bloco composto { ... }
                 if (no->child[0] != NULL) {
+                    // Declaração de variáveis e arrays dentro de função
                     TreeNode* declaracao = no->child[0];
                     while (declaracao != NULL) {
                         gerarComando(declaracao);
-                        if (declaracao->nodekind == STMTK && declaracao->child[0] != NULL && declaracao->child[0]->nodekind == VARK &&
-                            declaracao->child[0]->kind.var.attr.name != NULL) {
-                            
-                            const char* nomeFunc = (funcaoAtual != NULL) ? funcaoAtual : "global";
-                            const char* nomeVar  = declaracao->child[0]->kind.var.attr.name;
-                            
-                            printf("(ALOCA_MEM, %s, %s, _)\n", nomeFunc, nomeVar);
-                        }
                         declaracao = declaracao->sibling;
                     }
                 }
@@ -237,19 +262,37 @@ static void gerarComando(TreeNode* no) {
                             gerarComando(noIdentificador->child[1]);
                         }
 
-                        printf("(END_FUNC, %s, _, _)\n", funcaoAtual);
+                        printf("(ENDFUNC, %s, ___, ___)\n", funcaoAtual);
                         
                         funcaoAtual = funcaoAnterior;
 
-                    } else if (noIdentificador->kind.var.varKind == KIND_ARRAY &&
-                               noIdentificador->kind.var.acesso == DECLK) {
-                        // Declaração de array
+                    // Declaração de array
+                    } else if (noIdentificador->kind.var.varKind == KIND_ARRAY && noIdentificador->kind.var.acesso == DECLK) {
+                        
                         if (noIdentificador->child[0] != NULL) {
-                            printf("array %s[%d]\n", noIdentificador->kind.var.attr.name,
-                                   noIdentificador->child[0]->kind.var.attr.val);
+                            // escopo global
+                            if (funcaoAtual == NULL) {
+                               printf("(ALLOCAMEMVET, global, %s, %d)\n", noIdentificador->kind.var.attr.name,
+                                    noIdentificador->child[0]->kind.var.attr.val); 
+                            }
+                            // escopo de função
+                            else {
+                                printf("(ALLOCAMEMVET, %s, %s, %d)\n", funcaoAtual, noIdentificador->kind.var.attr.name,
+                                        noIdentificador->child[0]->kind.var.attr.val);
+                            }
                         }
+
+                    // Declaração de variáveis
+                    } else if (noIdentificador->kind.var.varKind == KIND_VAR && noIdentificador->kind.var.acesso == DECLK) {
+                        // escopo global
+                            if (funcaoAtual == NULL) {
+                               printf("(ALLOCAMEMVAR, global, %s, ___)\n", noIdentificador->kind.var.attr.name);; 
+                            }
+                            // escopo de função
+                            else {
+                                printf("(ALLOCAMEMVAR, %s, %s, ___)\n", funcaoAtual, noIdentificador->kind.var.attr.name);
+                            }    
                     }
-                    // Variáveis simples não geram código na declaração
                 }
                 break;
 
@@ -273,7 +316,7 @@ static void gerarComandoExpressao(TreeNode* no) {
             case ASSIGNK: 
                 if (no->child[0] != NULL && no->child[1] != NULL) {
                     valor = gerarExpressao(no->child[1]);
-
+                    char* temporario = novoTemporario();
                     if (no->child[0]->nodekind == VARK) {
                         if (no->child[0]->kind.var.varKind == KIND_ARRAY &&
                             no->child[0]->child[0] != NULL) {
@@ -281,7 +324,16 @@ static void gerarComandoExpressao(TreeNode* no) {
                             printf("%s[%s] = %s\n", no->child[0]->kind.var.attr.name,
                                    indice, valor);
                         } else {
-                            printf("(LOAD_VAR, %s, %s, _)\n", no->child[0]->kind.var.attr.name, valor);
+                            // caso de assign pra variavel normal
+                            if (no->child[1]->kind.var.varKind == KIND_VAR && no->child[1] != NULL){
+                                printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, valor, temporario);
+                                printf("(STOREVAR, %s, %s, %s)\n", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
+                            }
+                            // caso de assign pra vetor
+                            if (no->child[1]->kind.var.varKind == KIND_ARRAY && no->child[1] != NULL){
+                                printf("(LOADVET, %s, %s, %s)\n", funcaoAtual, valor, temporario);
+                                printf("(STOREVAR, %s, %s, %s)\n", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
+                            }
                         }
                     }
                 }
@@ -294,7 +346,7 @@ static void gerarComandoExpressao(TreeNode* no) {
 
                     while (argumento != NULL) {
                         char* tempArg = gerarExpressao(argumento);
-                        printf("(PARAM, %s, _, _)\n", tempArg);
+                        printf("(PARAM, %s, ___, ___)\n", tempArg);
                         numArgumentos++;
                         argumento = argumento->sibling;
                     }
