@@ -1,1 +1,7 @@
-- Fazer a AST salvar escopo para usar no codigo intermediário
+- Retorno de função
+
+- While
+
+- Vetor receber variavel
+
+- Load para constante
