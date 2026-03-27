@@ -43,26 +43,55 @@ static char* assignVetor(char* indice, char* vetor){
     return temp3;
 }
 
-// Função para gerar salto condicional If-else
-static void gerarCondicao(TreeNode* condicao, char* label){
-    char* operador;
-    char* esq = condicao->child[0]->kind.var.attr.name;
-    char* dir = condicao->child[1]->kind.var.attr.name;
+// salva endereços do no esquerda e direita para usar nas condições
+typedef struct {
+    char* esq;
+    char* dir;
+} CondAddrs;
 
-    // Inverte operador do tipo IFFALSE
-    switch (condicao->op){
-        case LT:      operador = "BGT"; break;
-        case LE:      operador = "BGE"; break;
-        case GT:      operador = "BLT"; break;
-        case GE:      operador = "BLE"; break;
-        case EQ:      operador = "BNE"; break;
-        case NE:      operador = "BEQ"; break;
-        
-        default:      operador = "?"; break;
+static char* resolverOperandoCond(TreeNode* no) {
+    if (no == NULL) return NULL;
+
+    if (no->nodekind == VARK) {
+        if (no->kind.var.varKind == KIND_ARRAY && no->child[0] != NULL) {
+            char* indice = gerarExpressao(no->child[0]);
+            return assignVetor(indice, no->kind.var.attr.name);
+        }
+
+        char* temp = novoTemporario();
+        printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, no->kind.var.attr.name, temp);
+        return temp;
     }
 
-    printf("(%s, %s, %s, %s)\n", operador, esq, dir, label);
+    return gerarExpressao(no);
+}
 
+static CondAddrs gerarCondicaoExpressao(TreeNode* esq, TreeNode* dir) {
+    CondAddrs out;
+    out.esq = resolverOperandoCond(esq);
+    out.dir = resolverOperandoCond(dir);
+    return out;
+}
+
+// Função para gerar salto condicional If-else
+static void gerarCondicao(TreeNode* condicao, char* label) {
+    if (condicao == NULL || condicao->child[0] == NULL || condicao->child[1] == NULL) return;
+
+    CondAddrs addrs = gerarCondicaoExpressao(condicao->child[0], condicao->child[1]);
+    if (addrs.esq == NULL || addrs.dir == NULL) return;
+
+    char* operador = "?";
+    switch (condicao->op) {
+        case LT: operador = "BGE"; break;
+        case LE: operador = "BGT"; break;
+        case GT: operador = "BLE"; break;
+        case GE: operador = "BLT"; break;
+        case EQ: operador = "BNE"; break;
+        case NE: operador = "BEQ"; break;
+        default: break;
+    }
+
+    printf("(%s, %s, %s, %s)\n", operador, addrs.esq, addrs.dir, label);
 }
 
 /* Gera código para expressões e retorna o temporário onde o resultado está armazenado */
@@ -79,7 +108,7 @@ static char* gerarExpressao(TreeNode* no) {
         switch (no->kind.exp) {
             case CONSTK:
                 temp = novoTemporario();
-                printf("(LOAD_CONST, $%s, %d, ___)\n", temp, no->kind.var.attr.val);
+                printf("(LOADCONST, %s, %d, ___)\n", temp, no->kind.var.attr.val);
                 return temp;
 
             case IDK: 
@@ -88,24 +117,25 @@ static char* gerarExpressao(TreeNode* no) {
             case OPK: 
                 esquerda = gerarExpressao(no->child[0]);
                 direita = gerarExpressao(no->child[1]);
-                temp = novoTemporario();
+                char* temp_rs = novoTemporario();
+                char* temp_rt = novoTemporario();
+                char* temp_rd = novoTemporario();
+
+                printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, esquerda, temp_rs);
+                printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, direita, temp_rt);
+
 
                 switch (no->op) {
                     case PLUS:    operador = "ADD"; break;
                     case MINUS:   operador = "SUB"; break;
                     case TIMES:   operador = "MULT"; break;
                     case DIVIDE:  operador = "DIV"; break;
-                    case LT:      operador = "BLT"; break;
-                    case LE:      operador = "BLE"; break;
-                    case GT:      operador = "BGT"; break;
-                    case GE:      operador = "BGE"; break;
-                    case EQ:      operador = "BEQ"; break;
-                    case NE:      operador = "BNE"; break;
+            
                     default:      operador = "?"; break;
                 }
                 // add RS, RT, RD
-                printf("(%s, $%s, %s, %s)\n", operador, esquerda, direita, temp);
-                return temp;
+                printf("(%s, %s, %s, %s)\n", operador, temp_rs, temp_rt, temp_rd);
+                return temp_rd;
 
             case CALLK: 
                 {
@@ -115,13 +145,12 @@ static char* gerarExpressao(TreeNode* no) {
                     // Processa argumentos
                     while (argumento != NULL) {
                         char* tempArg = gerarExpressao(argumento);
-                        printf("(PARAM, $%s, ___, ___)\n", tempArg);
+                        printf("(PARAM, %s, ___, ___)\n", tempArg);
                         numArgumentos++;
                         argumento = argumento->sibling;
                     }
 
-                    temp = novoTemporario();
-                    printf("(CALL, $%s, %s, %d)\n", temp, no->kind.var.attr.name, numArgumentos);
+                    printf("(CALL, %s, %s, %d)\n", temp, no->kind.var.attr.name, numArgumentos);
                     return temp;
                 }
 
@@ -151,7 +180,6 @@ static char* gerarExpressao(TreeNode* no) {
 
 /* Gera código para comandos (statements) */
 static void gerarComando(TreeNode* no) {
-    char* teste;
     char* labelFalso;
     char* labelFim;
     char* labelInicio;
@@ -163,8 +191,6 @@ static void gerarComando(TreeNode* no) {
     if (no->nodekind == STMTK) {
         switch (no->kind.stmt) {
             case IFK: // if ou if-else
-                // no->child[0] é a condição
-                // teste = gerarExpressao(no->child[0]);
                 labelFalso = novoLabel();
                 labelFim = novoLabel();
 
@@ -190,19 +216,21 @@ static void gerarComando(TreeNode* no) {
             case WHILEK: // Loop while
                 labelInicio = novoLabel();
                 labelFim = novoLabel();
+                // para o caso de condição ter expressão
+                TreeNode* condicao = no->child[0];
 
                 printf("(LABEL, %s, ___, ___)\n", labelInicio);
-                teste = gerarExpressao(no->child[0]);
-                printf("(IF_FALSE, %s, %s, ___)\n", teste, labelFim);
+                gerarCondicao(condicao, labelFim);
                 gerarComando(no->child[1]);
                 printf("(JUMP, %s, ___, ___)\n", labelInicio);
                 printf("(LABEL, %s, ___, ___)\n", labelFim);
+
                 break;
 
             case RETURNK: // Return
                 if (no->child[0] != NULL) {
                     valor = gerarExpressao(no->child[0]);
-                    printf("(RETURN, $%s, ___, ___)\n", valor);
+                    printf("(RETURN, %s, ___, ___)\n", valor);
                 } else {
                     printf("(RETURN, ___, ___, ___)\n");
                 }

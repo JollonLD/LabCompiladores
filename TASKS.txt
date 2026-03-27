@@ -1,7 +1,9 @@
 - Retorno de função
 
-- While
+- condição operação
 
 - Vetor receber variavel
+
+- Vetor receber Vetor
 
 - Load para constante
