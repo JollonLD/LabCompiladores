@@ -7,6 +7,7 @@
 /* Contadores globais para temporários e labels */
 static int contadorTemporarios = 0;
 static int contadorLabels = 0;
+static int maximoTemporarios = 58;
 
 /* Nome da Função Atual para salvar contexto */
 static const char* funcaoAtual = NULL;
@@ -41,6 +42,114 @@ static char* assignVetor(char* indice, char* vetor){
     printf("(ADD, %s, %s, %s)\n", temp1, temp2, temp3);
     
     return temp3;
+}
+
+// Lista de variáveis carregadas
+typedef struct VarList {
+    char* var;
+    char* temp;
+    struct VarList* prox;
+} VarList;
+
+// Inicializa a cabeça da lista
+static void inicializaListaVars(VarList* cabeca) {
+    if (cabeca == NULL) return;
+    cabeca->var = NULL;
+    cabeca->temp = NULL;
+    cabeca->prox = NULL;
+}
+
+// Função que adiciona variável na lista de temporarios
+static int colocaListaVars(VarList* cabeca, const char* var) {
+    VarList* atual;
+    VarList* novo;
+
+    if (cabeca == NULL || var == NULL) 
+        return 0;
+
+    if (contadorTemporarios >= maximoTemporarios) {
+        printf("Atingiu limite máximo de temporários: %d\n", maximoTemporarios);
+        return 0;
+    }
+
+    // busca
+    for (atual = cabeca->prox; atual != NULL; atual = atual->prox) {
+        if (atual->var != NULL && strcmp(atual->var, var) == 0) {
+            return 1;
+        }
+    }
+
+    novo = (VarList*)malloc(sizeof(VarList));
+    if (novo == NULL) 
+        return 0;
+
+    novo->var = (char*)var;          
+    novo->temp = novoTemporario(); 
+    novo->prox = NULL;
+
+    atual = cabeca;
+    while (atual->prox != NULL) {
+        atual = atual->prox;
+    }
+    atual->prox = novo;
+    
+    return 1;
+}
+
+// Função que remove variável na lista de temporarios
+static int removeListaVars(VarList* cabeca, const char* var) {
+    VarList* ant;
+    VarList* cur;
+
+    if (cabeca == NULL || var == NULL) return 0;
+
+    ant = cabeca;
+    cur = cabeca->prox;
+
+    while (cur != NULL) {
+        if (cur->var != NULL && strcmp(cur->var, var) == 0) {
+            ant->prox = cur->prox;
+            free(cur->temp);
+            free(cur);
+            return 1;
+        }
+        ant = cur;
+        cur = cur->prox;
+    }
+    return 0;
+}
+
+// Função que busca variável na lista de temporarios
+static char* buscaTemp(VarList* cabeca, const char* var) {
+    VarList* cur;
+
+    if (cabeca == NULL || var == NULL) return NULL;
+
+    cur = cabeca->prox;
+    while (cur != NULL) {
+        if (cur->var != NULL && strcmp(cur->var, var) == 0) {
+            return cur->temp;
+        }
+        cur = cur->prox;
+    }
+    return NULL;
+}
+
+// Libera todos os nos da lista
+static void liberaListaVars(VarList* cabeca) {
+    VarList* cur;
+    VarList* prox;
+
+    if (cabeca == NULL) return;
+
+    cur = cabeca->prox;
+    while (cur != NULL) {
+        prox = cur->prox;
+        free(cur->temp);
+        free(cur);
+        cur = prox;
+    }
+    cabeca->prox = NULL;
 }
 
 // salva endereços do no esquerda e direita para usar nas condições
@@ -121,6 +230,8 @@ static char* gerarExpressao(TreeNode* no) {
                 char* temp_rt = novoTemporario();
                 char* temp_rd = novoTemporario();
 
+
+                // Não precisa carregar toda a vez => Buscar na lista de variaveis
                 printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, esquerda, temp_rs);
                 printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, direita, temp_rt);
 
@@ -150,8 +261,7 @@ static char* gerarExpressao(TreeNode* no) {
                         argumento = argumento->sibling;
                     }
 
-                    printf("(CALL, %s, %s, %d)\n", temp, no->kind.var.attr.name, numArgumentos);
-                    return temp;
+                    printf("(CALL, ___, %s, %d)\n", no->kind.var.attr.name, numArgumentos);
                 }
 
             case ASSIGNK: 
@@ -349,8 +459,12 @@ static void gerarComandoExpressao(TreeNode* no) {
                         if (no->child[0]->kind.var.varKind == KIND_ARRAY &&
                             no->child[0]->child[0] != NULL) {
                             char* indice = gerarExpressao(no->child[0]->child[0]);
-                            printf("%s[%s] = %s\n", no->child[0]->kind.var.attr.name,
-                                   indice, valor);
+                            char* vetor = no->child[0]->kind.var.attr.name;
+                            char* result_vetor = assignVetor(indice, vetor);
+                            printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, valor, temporario);
+                            printf("(STOREVET, %s, %s, %s)\n", temporario, result_vetor, funcaoAtual);
+                            // printf("%s[%s] = %s\n", no->child[0]->kind.var.attr.name,
+                            //        indice, valor);
                         } else {
                             // caso de assign pra variavel normal
                             if (no->child[1]->kind.var.varKind == KIND_VAR && no->child[1] != NULL){

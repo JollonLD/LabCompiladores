@@ -7,3 +7,7 @@
 - Vetor receber Vetor
 
 - Load para constante
+
+- Assign ta bugado
+
+- Muitos registradores, usar lista

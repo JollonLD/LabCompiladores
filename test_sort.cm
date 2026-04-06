@@ -5,6 +5,7 @@ int minloc ( int a[], int low, int high )
 {	int i; int x; int k;
 	k = low;
 	x = a[low];
+	vet[2] = x;
 	i = low + 1;
 	jonas = 0;
 	while (i < high){
