@@ -319,7 +319,7 @@ static char* gerarExpressao(TreeNode* no) {
                         argumento = argumento->sibling;
                     }
 
-                    printf("(CALL, %s, %d, _)\n", no->kind.var.attr.name, numArgumentos);
+                    printf("(CALL, %s, %d, ___)\n", no->kind.var.attr.name, numArgumentos);
                     /* Conservador: chamada pode alterar estado observavel. */
                     liberaListaVars(&listaTemporarios);
                     inicializaListaVars(&listaTemporarios);
@@ -569,7 +569,7 @@ static void gerarComandoExpressao(TreeNode* no) {
                         argumento = argumento->sibling;
                     }
 
-                    printf("(CALL, %s, %d, _)\n", no->kind.var.attr.name, numArgumentos);
+                    printf("(CALL, %s, %d, ___)\n", no->kind.var.attr.name, numArgumentos);
                     liberaListaVars(&listaTemporarios);
                     inicializaListaVars(&listaTemporarios);
                 }
