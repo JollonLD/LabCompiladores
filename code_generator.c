@@ -17,8 +17,28 @@ static char* gerarExpressao(TreeNode* no);
 static void gerarComando(TreeNode* no);
 static void gerarComandoExpressao(TreeNode* no);
 
+typedef struct VarList {
+    char* var;
+    char* temp;
+    struct VarList* prox;
+} VarList;
+
+static VarList listaTemporarios;
+
+static int ehTemporario(const char* nome);
+static char* carregarOuReusarTemp(const char* operando);
+static void invalidarTempVariavel(const char* var);
+
 static char* novoTemporario(void) {
+    if (contadorTemporarios >= maximoTemporarios) {
+        printf("ERRO: limite maximo de temporarios atingido (%d)\n", maximoTemporarios);
+        return NULL;
+    }
+
     char* nomeTemp = (char*)malloc(10 * sizeof(char));
+    if (nomeTemp == NULL)
+        return NULL;
+
     sprintf(nomeTemp, "t%d", contadorTemporarios++);
     return nomeTemp;
 }
@@ -31,25 +51,19 @@ static char* novoLabel(void) {
 
 // Função para que seja feito a atribuição de um vetor para uma variável
 static char* assignVetor(char* indice, char* vetor){
-    if (indice == NULL) 
+    if (indice == NULL || vetor == NULL)
         return NULL;
-    
-    char* temp1 = novoTemporario();
-    char* temp2 = novoTemporario();
+
+    char* temp1 = carregarOuReusarTemp(indice);
+    char* temp2 = carregarOuReusarTemp(vetor);
     char* temp3 = novoTemporario();
-    printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, indice, temp1);
-    printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, vetor, temp2);
+    if (temp1 == NULL || temp2 == NULL || temp3 == NULL)
+        return NULL;
+
     printf("(ADD, %s, %s, %s)\n", temp1, temp2, temp3);
     
     return temp3;
 }
-
-// Lista de variáveis carregadas
-typedef struct VarList {
-    char* var;
-    char* temp;
-    struct VarList* prox;
-} VarList;
 
 // Inicializa a cabeça da lista
 static void inicializaListaVars(VarList* cabeca) {
@@ -67,16 +81,16 @@ static int colocaListaVars(VarList* cabeca, const char* var) {
     if (cabeca == NULL || var == NULL) 
         return 0;
 
-    if (contadorTemporarios >= maximoTemporarios) {
-        printf("Atingiu limite máximo de temporários: %d\n", maximoTemporarios);
-        return 0;
-    }
-
     // busca
     for (atual = cabeca->prox; atual != NULL; atual = atual->prox) {
         if (atual->var != NULL && strcmp(atual->var, var) == 0) {
             return 1;
         }
+    }
+
+    if (contadorTemporarios >= maximoTemporarios) {
+        printf("Atingiu limite maximo de temporarios: %d\n", maximoTemporarios);
+        return 0;
     }
 
     novo = (VarList*)malloc(sizeof(VarList));
@@ -85,6 +99,10 @@ static int colocaListaVars(VarList* cabeca, const char* var) {
 
     novo->var = (char*)var;          
     novo->temp = novoTemporario(); 
+    if (novo->temp == NULL) {
+        free(novo);
+        return 0;
+    }
     novo->prox = NULL;
 
     atual = cabeca;
@@ -152,6 +170,50 @@ static void liberaListaVars(VarList* cabeca) {
     cabeca->prox = NULL;
 }
 
+static int ehTemporario(const char* nome) {
+    if (nome == NULL)
+        return 0;
+
+    if (nome[0] == 't')
+        return 1;
+
+    /* Resultado de chamada de funcao no estado atual do gerador. */
+    if (strcmp(nome, "$rf") == 0)
+        return 1;
+
+    return 0;
+}
+
+static char* carregarOuReusarTemp(const char* operando) {
+    char* tempExistente;
+
+    if (operando == NULL)
+        return NULL;
+
+    if (ehTemporario(operando))
+        return (char*)operando;
+
+    tempExistente = buscaTemp(&listaTemporarios, operando);
+    if (tempExistente != NULL)
+        return tempExistente;
+
+    if (!colocaListaVars(&listaTemporarios, operando))
+        return NULL;
+
+    tempExistente = buscaTemp(&listaTemporarios, operando);
+    if (tempExistente == NULL)
+        return NULL;
+
+    printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, operando, tempExistente);
+    return tempExistente;
+}
+
+static void invalidarTempVariavel(const char* var) {
+    if (var == NULL)
+        return;
+    removeListaVars(&listaTemporarios, var);
+}
+
 // salva endereços do no esquerda e direita para usar nas condições
 typedef struct {
     char* esq;
@@ -167,9 +229,7 @@ static char* resolverOperandoCond(TreeNode* no) {
             return assignVetor(indice, no->kind.var.attr.name);
         }
 
-        char* temp = novoTemporario();
-        printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, no->kind.var.attr.name, temp);
-        return temp;
+        return carregarOuReusarTemp(no->kind.var.attr.name);
     }
 
     return gerarExpressao(no);
@@ -226,14 +286,12 @@ static char* gerarExpressao(TreeNode* no) {
             case OPK: 
                 esquerda = gerarExpressao(no->child[0]);
                 direita = gerarExpressao(no->child[1]);
-                char* temp_rs = novoTemporario();
-                char* temp_rt = novoTemporario();
+                char* temp_rs = carregarOuReusarTemp(esquerda);
+                char* temp_rt = carregarOuReusarTemp(direita);
                 char* temp_rd = novoTemporario();
 
-
-                // Não precisa carregar toda a vez => Buscar na lista de variaveis
-                printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, esquerda, temp_rs);
-                printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, direita, temp_rt);
+                if (temp_rs == NULL || temp_rt == NULL || temp_rd == NULL)
+                    return NULL;
 
 
                 switch (no->op) {
@@ -261,7 +319,11 @@ static char* gerarExpressao(TreeNode* no) {
                         argumento = argumento->sibling;
                     }
 
-                    printf("(CALL, ___, %s, %d)\n", no->kind.var.attr.name, numArgumentos);
+                    printf("(CALL, %s, %d, _)\n", no->kind.var.attr.name, numArgumentos);
+                    /* Conservador: chamada pode alterar estado observavel. */
+                    liberaListaVars(&listaTemporarios);
+                    inicializaListaVars(&listaTemporarios);
+                    return "$rf";
                 }
 
             case ASSIGNK: 
@@ -382,6 +444,10 @@ static void gerarComando(TreeNode* no) {
                         
                         const char* funcaoAnterior = funcaoAtual;
                         funcaoAtual = noIdentificador->kind.var.attr.name;
+
+                        /* Evita reutilizar temporarios de outra funcao. */
+                        liberaListaVars(&listaTemporarios);
+                        inicializaListaVars(&listaTemporarios);
                         
                         printf("(FUNC, %s, %s, _)\n", tipofunc, noIdentificador->kind.var.attr.name);
 
@@ -454,27 +520,37 @@ static void gerarComandoExpressao(TreeNode* no) {
             case ASSIGNK: 
                 if (no->child[0] != NULL && no->child[1] != NULL) {
                     valor = gerarExpressao(no->child[1]);
-                    char* temporario = novoTemporario();
+                    if (valor == NULL)
+                        return;
+
                     if (no->child[0]->nodekind == VARK) {
                         if (no->child[0]->kind.var.varKind == KIND_ARRAY &&
                             no->child[0]->child[0] != NULL) {
+                            char* temporario = carregarOuReusarTemp(valor);
                             char* indice = gerarExpressao(no->child[0]->child[0]);
                             char* vetor = no->child[0]->kind.var.attr.name;
                             char* result_vetor = assignVetor(indice, vetor);
-                            printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, valor, temporario);
+                            if (temporario == NULL || result_vetor == NULL)
+                                return;
                             printf("(STOREVET, %s, %s, %s)\n", temporario, result_vetor, funcaoAtual);
                             // printf("%s[%s] = %s\n", no->child[0]->kind.var.attr.name,
                             //        indice, valor);
                         } else {
-                            // caso de assign pra variavel normal
-                            if (no->child[1]->kind.var.varKind == KIND_VAR && no->child[1] != NULL){
-                                printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, valor, temporario);
-                                printf("(STOREVAR, %s, %s, %s)\n", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
-                            }
-                            // caso de assign pra vetor
-                            if (no->child[1]->kind.var.varKind == KIND_ARRAY && no->child[1] != NULL){
+                            if (no->child[1]->nodekind == VARK &&
+                                no->child[1]->kind.var.varKind == KIND_ARRAY &&
+                                no->child[1]->child[0] != NULL) {
+                                char* temporario = novoTemporario();
+                                if (temporario == NULL)
+                                    return;
                                 printf("(LOADVET, %s, %s, %s)\n", funcaoAtual, valor, temporario);
                                 printf("(STOREVAR, %s, %s, %s)\n", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
+                                invalidarTempVariavel(no->child[0]->kind.var.attr.name);
+                            } else {
+                                char* temporario = carregarOuReusarTemp(valor);
+                                if (temporario == NULL)
+                                    return;
+                                printf("(STOREVAR, %s, %s, %s)\n", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
+                                invalidarTempVariavel(no->child[0]->kind.var.attr.name);
                             }
                         }
                     }
@@ -494,6 +570,8 @@ static void gerarComandoExpressao(TreeNode* no) {
                     }
 
                     printf("(CALL, %s, %d, _)\n", no->kind.var.attr.name, numArgumentos);
+                    liberaListaVars(&listaTemporarios);
+                    inicializaListaVars(&listaTemporarios);
                 }
                 break;
 
@@ -516,7 +594,13 @@ static void percorrerArvore(TreeNode* no) {
 }
 
 void codeGen(TreeNode* arvoreSintatica) {
+    contadorTemporarios = 0;
+    contadorLabels = 0;
+    inicializaListaVars(&listaTemporarios);
+
     printf("\n*** CODIGO INTERMEDIARIO QUADRUPLAS ***\n\n");
     percorrerArvore(arvoreSintatica);
     printf("\n******************************************\n\n");
+
+    liberaListaVars(&listaTemporarios);
 }
