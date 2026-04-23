@@ -1,0 +1,14 @@
+int fat(int n)
+{
+    if (n <= 1) {
+        return 1;
+    }
+    return n * fat(n - 1);
+}
+
+void main(void)
+{
+    int x;
+    x = fat(5);
+    output(x);
+}
