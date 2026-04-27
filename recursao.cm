@@ -9,6 +9,7 @@ int fat(int n)
 void main(void)
 {
     int x;
+    x = x + 1;
     x = fat(5);
     output(x);
 }

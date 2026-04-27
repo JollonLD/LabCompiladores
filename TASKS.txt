@@ -1,13 +1,1 @@
-- Retorno de função
-
-- condição operação
-
-- Vetor receber variavel
-
-- Vetor receber Vetor
-
-- Load para constante
-
-- Assign ta bugado
-
-- Muitos registradores, usar lista
+Diagrama de Blocos para Análise e Geração

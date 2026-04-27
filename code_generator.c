@@ -29,14 +29,114 @@ typedef struct ConstList {
     struct ConstList* prox;
 } ConstList;
 
+typedef struct quadrupla {
+    char* opr;
+    char* op1;
+    char* op2;
+    char* op3;
+} quadrupla;
+
+typedef struct quadList {
+    quadrupla quad;
+    struct quadList* prox;
+} quadList;
+
 static VarList listaTemporarios;
 static ConstList listaConstantes;
+static quadList* listaQuadruplas = NULL;
+static quadList* ultimaQuadrupla = NULL;
 
 static int ehTemporario(const char* nome);
 static char* carregarOuReusarTemp(const char* operando);
 static char* carregarOuReusarConst(int valor);
 static void invalidarTempVariavel(const char* var);
 static void resetarCachesReuso(void);
+static char* duplicarTexto(const char* texto);
+static void adicionarQuadrupla(const char* opr, const char* op1, const char* op2, const char* op3);
+static void emitirQuadrupla(const char* opr, const char* op1, const char* op2, const char* op3);
+static void imprimirQuadruplas(void);
+static void liberarQuadruplas(void);
+
+static char* duplicarTexto(const char* texto) {
+    char* copia;
+
+    if (texto == NULL)
+        texto = "___";
+
+    copia = (char*)malloc(strlen(texto) + 1);
+    if (copia == NULL)
+        return NULL;
+
+    strcpy(copia, texto);
+    return copia;
+}
+
+static void adicionarQuadrupla(const char* opr, const char* op1, const char* op2, const char* op3) {
+    quadList* novo;
+
+    novo = (quadList*)malloc(sizeof(quadList));
+    if (novo == NULL)
+        return;
+
+    novo->quad.opr = duplicarTexto(opr);
+    novo->quad.op1 = duplicarTexto(op1);
+    novo->quad.op2 = duplicarTexto(op2);
+    novo->quad.op3 = duplicarTexto(op3);
+    novo->prox = NULL;
+
+    if (novo->quad.opr == NULL || novo->quad.op1 == NULL || novo->quad.op2 == NULL || novo->quad.op3 == NULL) {
+        free(novo->quad.opr);
+        free(novo->quad.op1);
+        free(novo->quad.op2);
+        free(novo->quad.op3);
+        free(novo);
+        return;
+    }
+
+    if (listaQuadruplas == NULL) {
+        listaQuadruplas = novo;
+        ultimaQuadrupla = novo;
+    } else {
+        ultimaQuadrupla->prox = novo;
+        ultimaQuadrupla = novo;
+    }
+}
+
+static void emitirQuadrupla(const char* opr, const char* op1, const char* op2, const char* op3) {
+    adicionarQuadrupla(opr, op1, op2, op3);
+}
+
+static void imprimirQuadruplas(void) {
+    quadList* atual = listaQuadruplas;
+
+    while (atual != NULL) {
+        printf("(%s, %s, %s, %s)\n",
+               atual->quad.opr,
+               atual->quad.op1,
+               atual->quad.op2,
+               atual->quad.op3);
+        atual = atual->prox;
+    }
+}
+
+static void liberarQuadruplas(void) {
+    quadList* atual;
+    quadList* proximo;
+
+    atual = listaQuadruplas;
+    while (atual != NULL) {
+        proximo = atual->prox;
+        free(atual->quad.opr);
+        free(atual->quad.op1);
+        free(atual->quad.op2);
+        free(atual->quad.op3);
+        free(atual);
+        atual = proximo;
+    }
+
+    listaQuadruplas = NULL;
+    ultimaQuadrupla = NULL;
+}
 
 static char* novoTemporario(void) {
     if (contadorTemporarios >= maximoTemporarios) {
@@ -69,7 +169,7 @@ static char* assignVetor(char* indice, char* vetor){
     if (temp1 == NULL || temp2 == NULL || temp3 == NULL)
         return NULL;
 
-    printf("(ADD, %s, %s, %s)\n", temp1, temp2, temp3);
+    emitirQuadrupla("ADD", temp1, temp2, temp3);
     
     return temp3;
 }
@@ -287,7 +387,7 @@ static char* carregarOuReusarTemp(const char* operando) {
     if (tempExistente == NULL)
         return NULL;
 
-    printf("(LOADVAR, %s, %s, %s)\n", funcaoAtual, operando, tempExistente);
+    emitirQuadrupla("LOADVAR", funcaoAtual, operando, tempExistente);
     return tempExistente;
 }
 
@@ -304,7 +404,10 @@ static char* carregarOuReusarConst(int valor) {
     if (tempExistente == NULL)
         return NULL;
 
-    printf("(LOADCONST, %s, %d, ___)\n", tempExistente, valor);
+    char valorTexto[32];
+    sprintf(valorTexto, "%d", valor);
+    emitirQuadrupla("LOADCONST", tempExistente, valorTexto, "___");
+
     return tempExistente;
 }
 
@@ -367,7 +470,7 @@ static void gerarCondicao(TreeNode* condicao, char* label) {
         default: break;
     }
 
-    printf("(%s, %s, %s, %s)\n", operador, addrs.esq, addrs.dir, label);
+    emitirQuadrupla(operador, addrs.esq, addrs.dir, label);
 }
 
 /* Gera código para expressões e retorna o temporário onde o resultado está armazenado */
@@ -409,7 +512,7 @@ static char* gerarExpressao(TreeNode* no) {
                     default:      operador = "?"; break;
                 }
                 // add RS, RT, RD
-                printf("(%s, %s, %s, %s)\n", operador, temp_rs, temp_rt, temp_rd);
+                emitirQuadrupla(operador, temp_rs, temp_rt, temp_rd);
                 return temp_rd;
 
             case CALLK: 
@@ -421,12 +524,13 @@ static char* gerarExpressao(TreeNode* no) {
                     while (argumento != NULL) {
                         char* tempArg = gerarExpressao(argumento);
                         tempArg = carregarOuReusarTemp(tempArg);
-                        printf("(PARAM, %s, ___, ___)\n", tempArg);
+                        emitirQuadrupla("PARAM", tempArg, "___", "___");
                         numArgumentos++;
                         argumento = argumento->sibling;
                     }
-
-                    printf("(CALL, %s, %d, ___)\n", no->kind.var.attr.name, numArgumentos);
+                    char numTexto[32];
+                    sprintf(numTexto, "%d", numArgumentos);
+                    emitirQuadrupla("CALL", no->kind.var.attr.name, numTexto, "___");
                     /* Conservador: chamada pode alterar estado observavel. */
                     resetarCachesReuso();
                     return "$rf";
@@ -480,14 +584,14 @@ static void gerarComando(TreeNode* no) {
                 // Tem else
                 if (no->child[2] != NULL) {
                     // salto para Fim dentro do If
-                    printf("(JUMP, %s, ___, ___)\n", labelFim);
+                    emitirQuadrupla("JUMP", labelFim, "___", "___");
                     // começo do Else
-                    printf("(LABEL, %s, ___, ___)\n", labelFalso);
+                    emitirQuadrupla("LABEL", labelFalso, "___", "___");
                     gerarComando(no->child[2]);
-                    printf("(LABEL, %s, ___, ___)\n", labelFim);
+                    emitirQuadrupla("LABEL", labelFim, "___", "___");
                 } else {
                     // Sem else
-                    printf("(LABEL, %s, ___, ___)\n", labelFalso);
+                    emitirQuadrupla("LABEL", labelFalso, "___", "___");
                 }
                 break;
 
@@ -497,11 +601,11 @@ static void gerarComando(TreeNode* no) {
                 // para o caso de condição ter expressão
                 TreeNode* condicao = no->child[0];
 
-                printf("(LABEL, %s, ___, ___)\n", labelInicio);
+                emitirQuadrupla("LABEL", labelInicio, "___", "___");
                 gerarCondicao(condicao, labelFim);
                 gerarComando(no->child[1]);
-                printf("(JUMP, %s, ___, ___)\n", labelInicio);
-                printf("(LABEL, %s, ___, ___)\n", labelFim);
+                emitirQuadrupla("JUMP", labelInicio, "___", "___");
+                emitirQuadrupla("LABEL", labelFim, "___", "___");
 
                 break;
 
@@ -509,9 +613,9 @@ static void gerarComando(TreeNode* no) {
                 if (no->child[0] != NULL) {
                     valor = gerarExpressao(no->child[0]);
                     char* temp = carregarOuReusarTemp(valor);
-                    printf("(RETURN, %s, ___, ___)\n", temp);
+                    emitirQuadrupla("RETURN", temp, "___", "___");
                 } else {
-                    printf("(RETURN, ___, ___, ___)\n");
+                    emitirQuadrupla("RETURN", "___", "___", "___");
                 }
                 break;
 
@@ -555,14 +659,14 @@ static void gerarComando(TreeNode* no) {
                         /* Evita reutilizar temporarios de outra funcao. */
                         resetarCachesReuso();
                         
-                        printf("(FUNC, %s, %s, _)\n", tipofunc, noIdentificador->kind.var.attr.name);
+                            emitirQuadrupla("FUNC", tipofunc, noIdentificador->kind.var.attr.name, "_");
 
                         // Processa parâmetros (child[0] do nó de função)
                         if (noIdentificador->child[0] != NULL) {
                             TreeNode* parametro = noIdentificador->child[0];
                             while (parametro != NULL) {
                                 if (parametro->nodekind == STMTK && parametro->child[0] != NULL) {
-                                    printf("(ARG, %s, %s, _)\n", parametro->child[0]->kind.var.attr.name, funcaoAtual);
+                                    emitirQuadrupla("ARG", parametro->child[0]->kind.var.attr.name, funcaoAtual, "_");
                                 }
                                 parametro = parametro->sibling;
                             }
@@ -572,7 +676,7 @@ static void gerarComando(TreeNode* no) {
                             gerarComando(noIdentificador->child[1]);
                         }
 
-                        printf("(ENDFUNC, %s, ___, ___)\n", funcaoAtual);
+                        emitirQuadrupla("ENDFUNC", funcaoAtual, "___", "___");
                         
                         funcaoAtual = funcaoAnterior;
 
@@ -582,13 +686,15 @@ static void gerarComando(TreeNode* no) {
                         if (noIdentificador->child[0] != NULL) {
                             // escopo global
                             if (funcaoAtual == NULL) {
-                               printf("(ALLOCAMEMVET, global, %s, %d)\n", noIdentificador->kind.var.attr.name,
-                                    noIdentificador->child[0]->kind.var.attr.val); 
+                                char valorTexto[32];
+                                sprintf(valorTexto, "%d", noIdentificador->child[0]->kind.var.attr.val);
+                                emitirQuadrupla("ALLOCAMEMVET", "global", noIdentificador->kind.var.attr.name, valorTexto);
                             }
                             // escopo de função
                             else {
-                                printf("(ALLOCAMEMVET, %s, %s, %d)\n", funcaoAtual, noIdentificador->kind.var.attr.name,
-                                        noIdentificador->child[0]->kind.var.attr.val);
+                                char valorTexto[32];
+                                sprintf(valorTexto, "%d", noIdentificador->child[0]->kind.var.attr.val);
+                                emitirQuadrupla("ALLOCAMEMVET", funcaoAtual, noIdentificador->kind.var.attr.name, valorTexto);
                             }
                         }
 
@@ -596,11 +702,11 @@ static void gerarComando(TreeNode* no) {
                     } else if (noIdentificador->kind.var.varKind == KIND_VAR && noIdentificador->kind.var.acesso == DECLK) {
                         // escopo global
                             if (funcaoAtual == NULL) {
-                               printf("(ALLOCAMEMVAR, global, %s, ___)\n", noIdentificador->kind.var.attr.name);; 
+                               emitirQuadrupla("ALLOCAMEMVAR", "global", noIdentificador->kind.var.attr.name, "___");
                             }
                             // escopo de função
                             else {
-                                printf("(ALLOCAMEMVAR, %s, %s, ___)\n", funcaoAtual, noIdentificador->kind.var.attr.name);
+                                emitirQuadrupla("ALLOCAMEMVAR", funcaoAtual, noIdentificador->kind.var.attr.name, "___");
                             }    
                     }
                 }
@@ -638,7 +744,7 @@ static void gerarComandoExpressao(TreeNode* no) {
                             char* result_vetor = assignVetor(indice, vetor);
                             if (temporario == NULL || result_vetor == NULL)
                                 return;
-                            printf("(STOREVET, %s, %s, %s)\n", temporario, result_vetor, funcaoAtual);
+                            emitirQuadrupla("STOREVET", temporario, result_vetor, funcaoAtual);
                             // printf("%s[%s] = %s\n", no->child[0]->kind.var.attr.name,
                             //        indice, valor);
                         } else {
@@ -648,14 +754,14 @@ static void gerarComandoExpressao(TreeNode* no) {
                                 char* temporario = novoTemporario();
                                 if (temporario == NULL)
                                     return;
-                                printf("(LOADVET, %s, %s, %s)\n", funcaoAtual, valor, temporario);
-                                printf("(STOREVAR, %s, %s, %s)\n", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
+                                emitirQuadrupla("LOADVET", funcaoAtual, valor, temporario);
+                                emitirQuadrupla("STOREVAR", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
                                 invalidarTempVariavel(no->child[0]->kind.var.attr.name);
                             } else {
                                 char* temporario = carregarOuReusarTemp(valor);
                                 if (temporario == NULL)
                                     return;
-                                printf("(STOREVAR, %s, %s, %s)\n", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
+                                emitirQuadrupla("STOREVAR", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
                                 invalidarTempVariavel(no->child[0]->kind.var.attr.name);
                             }
                         }
@@ -671,12 +777,16 @@ static void gerarComandoExpressao(TreeNode* no) {
                     while (argumento != NULL) {
                         char* tempArg = gerarExpressao(argumento);
                         tempArg = carregarOuReusarTemp(tempArg);
-                        printf("(PARAM, %s, ___, ___)\n", tempArg);
+                        emitirQuadrupla("PARAM", tempArg, "___", "___");
                         numArgumentos++;
                         argumento = argumento->sibling;
                     }
 
-                    printf("(CALL, %s, %d, ___)\n", no->kind.var.attr.name, numArgumentos);
+                    {
+                        char numTexto[32];
+                        sprintf(numTexto, "%d", numArgumentos);
+                        emitirQuadrupla("CALL", no->kind.var.attr.name, numTexto, "___");
+                    }
                     resetarCachesReuso();
                 }
                 break;
@@ -697,7 +807,7 @@ static void percorrerArvore(TreeNode* no) {
         }
         no = no->sibling;
     }
-    printf("(HALT, ___, ___, ___)\n");
+    emitirQuadrupla("HALT", "___", "___", "___");
 }
 
 void codeGen(TreeNode* arvoreSintatica) {
@@ -705,11 +815,15 @@ void codeGen(TreeNode* arvoreSintatica) {
     contadorLabels = 0;
     inicializaListaVars(&listaTemporarios);
     inicializaListaConsts(&listaConstantes);
+    listaQuadruplas = NULL;
+    ultimaQuadrupla = NULL;
 
     printf("\n*** CODIGO INTERMEDIARIO QUADRUPLAS ***\n\n");
     percorrerArvore(arvoreSintatica);
+    imprimirQuadruplas();
     printf("\n******************************************\n\n");
 
     liberaListaVars(&listaTemporarios);
     liberaListaConsts(&listaConstantes);
+    liberarQuadruplas();
 }
