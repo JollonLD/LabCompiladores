@@ -799,6 +799,8 @@ static void gerarComandoExpressao(TreeNode* no) {
 
 /* Percorre a árvore sintática gerando código */
 static void percorrerArvore(TreeNode* no) {
+    emitirQuadrupla("NOP", "___", "___", "___");
+    
     while (no != NULL) {
         if (no->nodekind == STMTK) {
             gerarComando(no);
