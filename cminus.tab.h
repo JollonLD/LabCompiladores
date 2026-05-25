@@ -1,23 +1,22 @@
+/* A Bison parser, made by GNU Bison 3.8.2.  */
 
-/* A Bison parser, made by GNU Bison 2.4.1.  */
+/* Bison interface for Yacc-like parsers in C
 
-/* Skeleton interface for Bison's Yacc-like parsers in C
-   
-      Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
-   Free Software Foundation, Inc.
-   
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation,
+   Inc.
+
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation, either version 3 of the License, or
    (at your option) any later version.
-   
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-   
+
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -28,13 +27,24 @@
    special exception, which will cause the skeleton and the resulting
    Bison output files to be licensed under the GNU General Public
    License without this special exception.
-   
+
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
-/* "%code requires" blocks.  */
+/* DO NOT RELY ON FEATURES THAT ARE NOT DOCUMENTED in the manual,
+   especially those whose name start with YY_ or yy_.  They are
+   private implementation details that can be changed or removed.  */
 
-/* Line 1676 of yacc.c  */
+#ifndef YY_YY_CMINUS_TAB_H_INCLUDED
+# define YY_YY_CMINUS_TAB_H_INCLUDED
+/* Debug traces.  */
+#ifndef YYDEBUG
+# define YYDEBUG 0
+#endif
+#if YYDEBUG
+extern int yydebug;
+#endif
+/* "%code requires" blocks.  */
 #line 61 "cminusSintSem.y"
 
     #include "parser_context.h"
@@ -125,54 +135,52 @@
     TreeNode* newVarNode(ExpKind kind);
     void printTree(TreeNode *tree, int indent);
 
+#line 139 "cminus.tab.h"
 
-
-/* Line 1676 of yacc.c  */
-#line 132 "cminus.tab.h"
-
-/* Tokens.  */
+/* Token kinds.  */
 #ifndef YYTOKENTYPE
 # define YYTOKENTYPE
-   /* Put the tokens into the symbol table, so that GDB and other debuggers
-      know about them.  */
-   enum yytokentype {
-     ID = 258,
-     NUM = 259,
-     ELSE = 260,
-     IF = 261,
-     INT = 262,
-     RETURN = 263,
-     VOID = 264,
-     WHILE = 265,
-     LE = 266,
-     LT = 267,
-     GT = 268,
-     GE = 269,
-     EQ = 270,
-     NE = 271,
-     ASSIGN = 272,
-     SEMI = 273,
-     COMMA = 274,
-     LPAREN = 275,
-     RPAREN = 276,
-     LBRACK = 277,
-     RBRACK = 278,
-     LBRACE = 279,
-     RBRACE = 280,
-     PLUS = 281,
-     MINUS = 282,
-     TIMES = 283,
-     DIVIDE = 284
-   };
+  enum yytokentype
+  {
+    YYEMPTY = -2,
+    YYEOF = 0,                     /* "end of file"  */
+    YYerror = 256,                 /* error  */
+    YYUNDEF = 257,                 /* "invalid token"  */
+    ID = 258,                      /* ID  */
+    NUM = 259,                     /* NUM  */
+    ELSE = 260,                    /* ELSE  */
+    IF = 261,                      /* IF  */
+    INT = 262,                     /* INT  */
+    RETURN = 263,                  /* RETURN  */
+    VOID = 264,                    /* VOID  */
+    WHILE = 265,                   /* WHILE  */
+    LE = 266,                      /* LE  */
+    LT = 267,                      /* LT  */
+    GT = 268,                      /* GT  */
+    GE = 269,                      /* GE  */
+    EQ = 270,                      /* EQ  */
+    NE = 271,                      /* NE  */
+    ASSIGN = 272,                  /* ASSIGN  */
+    SEMI = 273,                    /* SEMI  */
+    COMMA = 274,                   /* COMMA  */
+    LPAREN = 275,                  /* LPAREN  */
+    RPAREN = 276,                  /* RPAREN  */
+    LBRACK = 277,                  /* LBRACK  */
+    RBRACK = 278,                  /* RBRACK  */
+    LBRACE = 279,                  /* LBRACE  */
+    RBRACE = 280,                  /* RBRACE  */
+    PLUS = 281,                    /* PLUS  */
+    MINUS = 282,                   /* MINUS  */
+    TIMES = 283,                   /* TIMES  */
+    DIVIDE = 284                   /* DIVIDE  */
+  };
+  typedef enum yytokentype yytoken_kind_t;
 #endif
 
-
-
+/* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-typedef union YYSTYPE
+union YYSTYPE
 {
-
-/* Line 1676 of yacc.c  */
 #line 151 "cminusSintSem.y"
 
     int ival;
@@ -184,16 +192,19 @@ typedef union YYSTYPE
     } var_info;
     TreeNode *node;
 
+#line 196 "cminus.tab.h"
 
-
-/* Line 1676 of yacc.c  */
-#line 191 "cminus.tab.h"
-} YYSTYPE;
+};
+typedef union YYSTYPE YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
-# define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
 #endif
+
 
 extern YYSTYPE yylval;
 
 
+int yyparse (ParserContext *ctx);
+
+
+#endif /* !YY_YY_CMINUS_TAB_H_INCLUDED  */

@@ -1,0 +1,37 @@
+nop
+j 21
+(FUNC, int, gcd, ___)
+(ARG, u, gcd, ___)
+(ARG, v, gcd, ___)
+(LOADVAR, gcd, v, t0)
+(LOADCONST, t1, 0, ___)
+bne $r4, $r5, 11
+(LOADVAR, gcd, u, t2)
+(RETURN, t2, ___, ___)
+j 19
+(LABEL, L0, ___, ___)
+(PARAM, t0, ___, ___)
+div $r6, $r7, $r4
+mult $r8, $r6, $r4
+sub $r9, $r7, $r8
+(PARAM, t5, ___, ___)
+(CALL, gcd, 2, ___)
+(RETURN, $rf, ___, ___)
+(LABEL, L1, ___, ___)
+(ENDFUNC, gcd, ___, ___)
+(FUNC, void, main, ___)
+(ALLOCAMEMVAR, main, x, ___)
+(ALLOCAMEMVAR, main, y, ___)
+(CALL, input, 0, ___)
+(STOREVAR, $rf, x, main)
+(CALL, input, 0, ___)
+(STOREVAR, $rf, y, main)
+(LOADVAR, main, x, t6)
+(PARAM, t6, ___, ___)
+(LOADVAR, main, y, t7)
+(PARAM, t7, ___, ___)
+(CALL, gcd, 2, ___)
+(PARAM, $rf, ___, ___)
+(CALL, output, 1, ___)
+(ENDFUNC, main, ___, ___)
+hlt

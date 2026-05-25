@@ -1,5 +1,5 @@
 #include "code_generator.h"
-#include "intermediario_para_assembly.h"
+#include "assembly_generator.h"
 #include "cminus.tab.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -788,7 +788,6 @@ static void gerarComandoExpressao(TreeNode* no) {
 
 /* Percorre a árvore sintática gerando código */
 static void percorrerArvore(TreeNode* no) {
-    emitirQuadrupla("NOP", "___", "___", "___");
     
     while (no != NULL) {
         if (no->nodekind == STMTK) {

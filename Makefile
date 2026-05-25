@@ -14,8 +14,8 @@ CONTEXT_SRC = parser_context.c
 CONTEXT_HDR = parser_context.h
 CODEGEN_SRC = code_generator.c
 CODEGEN_HDR = code_generator.h
-ASM_SRC = intermediario_para_assembly.c
-ASM_HDR = intermediario_para_assembly.h
+ASM_SRC = assembly_generator.c
+ASM_HDR = assembly_generator.h
 
 # Arquivos gerados
 LEX_GEN = lex.yy.c
@@ -25,7 +25,7 @@ YACC_GEN_H = cminus.tab.h
 # Arquivos objeto
 CONTEXT_OBJ = parser_context.o
 CODEGEN_OBJ = code_generator.o
-ASM_OBJ = intermediario_para_assembly.o
+ASM_OBJ = assembly_generator.o
 LEX_OBJ = lex.yy.o
 YACC_OBJ = cminus.tab.o
 
@@ -105,7 +105,7 @@ $(CONTEXT_OBJ): $(CONTEXT_SRC) $(CONTEXT_HDR)
 $(CODEGEN_OBJ): $(CODEGEN_SRC) $(CODEGEN_HDR) $(ASM_HDR) $(YACC_GEN_H) $(CONTEXT_HDR)
 	$(CC) $(CFLAGS) -c $(CODEGEN_SRC) -o $(CODEGEN_OBJ)
 
-# Compila intermediario_para_assembly.c
+# Compila assembly_generator.c
 $(ASM_OBJ): $(ASM_SRC) $(ASM_HDR) $(CODEGEN_HDR)
 	$(CC) $(CFLAGS) -c $(ASM_SRC) -o $(ASM_OBJ)
 
