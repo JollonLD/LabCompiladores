@@ -1,1 +1,5 @@
-Diagrama de Blocos para Análise e Geração
+bison -d cminusSintSem.y -o cminus.tab.c                                             
+flex cminusLex.l
+gcc -Wall -Wno-unused-function -g -o cminus.exe lex.yy.c cminus.tab.c parser_context.c code_generator.c
+
+ & "C:\Program Files\Graphviz\bin\dot.exe" -Tsvg .\ast.dot -o .\ast.svg  

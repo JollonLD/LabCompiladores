@@ -1,4 +1,5 @@
 #include "code_generator.h"
+#include "intermediario_para_assembly.h"
 #include "cminus.tab.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -28,18 +29,6 @@ typedef struct ConstList {
     char* temp;
     struct ConstList* prox;
 } ConstList;
-
-typedef struct quadrupla {
-    char* opr;
-    char* op1;
-    char* op2;
-    char* op3;
-} quadrupla;
-
-typedef struct quadList {
-    quadrupla quad;
-    struct quadList* prox;
-} quadList;
 
 static VarList listaTemporarios;
 static ConstList listaConstantes;
@@ -823,6 +812,7 @@ void codeGen(TreeNode* arvoreSintatica) {
     printf("\n*** CODIGO INTERMEDIARIO QUADRUPLAS ***\n\n");
     percorrerArvore(arvoreSintatica);
     imprimirQuadruplas();
+    traduzirQuadruplasParaAssembly(listaQuadruplas);
     printf("\n******************************************\n\n");
 
     liberaListaVars(&listaTemporarios);
