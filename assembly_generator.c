@@ -441,7 +441,7 @@ static int traduzirQuadrupla(const quadrupla* quad) {
             return 1;
         
         case Q_ARG:
-            inserirVariavelNoEscopo(quad->op1, quad->op2);
+            inserirVariavelNoEscopo(quad->op2, quad->op1);
             printf("%s %s, %s, 1\n", nomeInstrucaoAssembly(addi), "$sp", "$sp");
 
             return 1;

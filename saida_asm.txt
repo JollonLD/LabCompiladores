@@ -3,7 +3,7 @@ j 21
 (FUNC, int, gcd, ___)
 addi $sp, $sp, 1
 addi $sp, $sp, 1
-lwd $r4 $fp 0
+lwd $r4 $fp 1
 li $r5, 10
 bne $r4, $r5, 11
 lwd $r6 $fp 0
