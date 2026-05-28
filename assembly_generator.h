@@ -25,6 +25,7 @@ typedef enum {
     Q_OUTPUT,
     Q_STOREVAR,
     Q_LOADVAR,
+    Q_LOADCONST,
     Q_STOREVET,
     Q_LOADVET,
     Q_FUNC,
@@ -55,6 +56,9 @@ typedef enum {
     blt,
     bne,
     j,
+    lwd,
+    swd,
+    li,
     in,
     out
 } AssemblyOp;

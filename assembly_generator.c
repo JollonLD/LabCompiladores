@@ -16,8 +16,22 @@ typedef struct MapaRegistrador {
     struct MapaRegistrador* prox;
 } MapaRegistrador;
 
+typedef struct VariavelEscopo {
+    char* nome;
+    int deslocamento;
+    struct VariavelEscopo* prox;
+} VariavelEscopo;
+
+typedef struct EscopoVariavel {
+    char* nomeEscopo;
+    VariavelEscopo* variaveis;
+    int proximoDeslocamento;
+    struct EscopoVariavel* prox;
+} EscopoVariavel;
+
 static LabelLinha* listaLabels = NULL;
 static MapaRegistrador* mapaRegistradores = NULL;
+static EscopoVariavel* listaEscoposVariaveis = NULL;
 static int proximoRegistradorGeral = 4;
 static int labelOffset = 0; /* offset para ajustar destinos de salto (instrucoes iniciais) */
 
@@ -60,6 +74,126 @@ static void liberarMapaRegistradores(void) {
 
     mapaRegistradores = NULL;
     proximoRegistradorGeral = 4;
+}
+
+static void liberarMapaEscoposVariaveis(void) {
+    EscopoVariavel* escopoAtual = listaEscoposVariaveis;
+
+    while (escopoAtual != NULL) {
+        EscopoVariavel* proxEscopo = escopoAtual->prox;
+        VariavelEscopo* variavelAtual = escopoAtual->variaveis;
+
+        while (variavelAtual != NULL) {
+            VariavelEscopo* proxVariavel = variavelAtual->prox;
+            free(variavelAtual->nome);
+            free(variavelAtual);
+            variavelAtual = proxVariavel;
+        }
+
+        free(escopoAtual->nomeEscopo);
+        free(escopoAtual);
+        escopoAtual = proxEscopo;
+    }
+
+    listaEscoposVariaveis = NULL;
+}
+
+static EscopoVariavel* buscarEscopoVariavel(const char* nomeEscopo) {
+    EscopoVariavel* atual;
+
+    for (atual = listaEscoposVariaveis; atual != NULL; atual = atual->prox) {
+        if (strcmp(atual->nomeEscopo, nomeEscopo) == 0)
+            return atual;
+    }
+
+    return NULL;
+}
+
+static EscopoVariavel* adicionarEscopoVariavel(const char* nomeEscopo) {
+    EscopoVariavel* novo;
+
+    novo = (EscopoVariavel*)malloc(sizeof(EscopoVariavel));
+    if (novo == NULL)
+        return NULL;
+
+    novo->nomeEscopo = duplicarTexto(nomeEscopo);
+    if (novo->nomeEscopo == NULL) {
+        free(novo);
+        return NULL;
+    }
+
+    novo->variaveis = NULL;
+    novo->proximoDeslocamento = 0;
+    novo->prox = listaEscoposVariaveis;
+    listaEscoposVariaveis = novo;
+
+    return novo;
+}
+
+static int inserirVariavelNoEscopo(const char* nomeEscopo, const char* nomeVariavel) {
+    EscopoVariavel* escopo;
+    VariavelEscopo* variavel;
+    VariavelEscopo* novaVariavel;
+
+    if (nomeEscopo == NULL || *nomeEscopo == '\0' || nomeVariavel == NULL || *nomeVariavel == '\0')
+        return 0;
+
+    escopo = buscarEscopoVariavel(nomeEscopo);
+    if (escopo == NULL)
+        escopo = adicionarEscopoVariavel(nomeEscopo);
+    if (escopo == NULL)
+        return 0;
+
+    for (variavel = escopo->variaveis; variavel != NULL; variavel = variavel->prox) {
+        if (strcmp(variavel->nome, nomeVariavel) == 0)
+            return 1;
+    }
+
+    novaVariavel = (VariavelEscopo*)malloc(sizeof(VariavelEscopo));
+    if (novaVariavel == NULL)
+        return 0;
+
+    novaVariavel->nome = duplicarTexto(nomeVariavel);
+    if (novaVariavel->nome == NULL) {
+        free(novaVariavel);
+        return 0;
+    }
+
+    novaVariavel->deslocamento = escopo->proximoDeslocamento++;
+    novaVariavel->prox = escopo->variaveis;
+    escopo->variaveis = novaVariavel;
+    return 1;
+}
+
+static int escopoEhGlobal(const char* nomeEscopo) {
+    return nomeEscopo == NULL || strcmp(nomeEscopo, "global") == 0;
+}
+
+static const VariavelEscopo* buscarVariavelNoEscopo(const char* nomeEscopo, const char* nomeVariavel) {
+    EscopoVariavel* escopo;
+    VariavelEscopo* variavel;
+
+    if (nomeVariavel == NULL || *nomeVariavel == '\0')
+        return NULL;
+
+    escopo = buscarEscopoVariavel(nomeEscopo);
+    if (escopo == NULL && !escopoEhGlobal(nomeEscopo))
+        escopo = buscarEscopoVariavel("global");
+    if (escopo == NULL)
+        return NULL;
+
+    for (variavel = escopo->variaveis; variavel != NULL; variavel = variavel->prox) {
+        if (strcmp(variavel->nome, nomeVariavel) == 0)
+            return variavel;
+    }
+
+    return NULL;
+}
+
+static const char* baseParaEscopo(const char* nomeEscopo) {
+    if (escopoEhGlobal(nomeEscopo))
+        return "$zero";
+    return "$fp";
 }
 
 static void adicionarLabel(const char* nome, int linha) {
@@ -185,12 +319,9 @@ static QuadruplaOp operadorQuadrupla(const char* opr) {
     if (ehQuadrupla(opr, "BNE")) return Q_BNE;
     if (ehQuadrupla(opr, "JUMP")) return Q_JUMP;
     if (ehQuadrupla(opr, "LABEL")) return Q_LABEL;
-    if (ehQuadrupla(opr, "IN")) return Q_IN;
-    if (ehQuadrupla(opr, "INPUT")) return Q_INPUT;
-    if (ehQuadrupla(opr, "OUT")) return Q_OUT;
-    if (ehQuadrupla(opr, "OUTPUT")) return Q_OUTPUT;
     if (ehQuadrupla(opr, "STOREVAR")) return Q_STOREVAR;
     if (ehQuadrupla(opr, "LOADVAR")) return Q_LOADVAR;
+    if (ehQuadrupla(opr, "LOADCONST")) return Q_LOADCONST;
     if (ehQuadrupla(opr, "STOREVET")) return Q_STOREVET;
     if (ehQuadrupla(opr, "LOADVET")) return Q_LOADVET;
     if (ehQuadrupla(opr, "FUNC")) return Q_FUNC;
@@ -228,31 +359,6 @@ static const char* nomeInstrucaoAssembly(AssemblyOp op) {
     }
 }
 
-static int geraInstrucaoDireta(QuadruplaOp op) {
-    switch (op) {
-        case Q_NOP:
-        case Q_HALT:
-        case Q_ADD:
-        case Q_SUB:
-        case Q_MULT:
-        case Q_DIV:
-        case Q_BEQ:
-        case Q_BGE:
-        case Q_BGT:
-        case Q_BLE:
-        case Q_BLT:
-        case Q_BNE:
-        case Q_JUMP:
-        case Q_IN:
-        case Q_INPUT:
-        case Q_OUT:
-        case Q_OUTPUT:
-            return 1;
-        default:
-            return 0;
-    }
-}
-
 static int operandoValido(const char* operando) {
     return operando != NULL && strcmp(operando, "___") != 0 && strcmp(operando, "_") != 0;
 }
@@ -278,11 +384,13 @@ static AssemblyOp branchOuSaltoAsm(QuadruplaOp op) {
     }
 }
 
-static int traduzirQuadruplaDireta(const quadrupla* quad) {
+static int traduzirQuadrupla(const quadrupla* quad) {
     QuadruplaOp op;
     const char* rd;
     const char* rs;
     const char* rt;
+    const VariavelEscopo* variavel;
+    const char* base;
 
     if (quad == NULL || quad->opr == NULL)
         return 0;
@@ -331,6 +439,33 @@ static int traduzirQuadruplaDireta(const quadrupla* quad) {
             rt = mapearParaRegistradorGeral(quad->op2);
             printf("%s %s, %s, %s\n", nomeInstrucaoAssembly(divisao), rd, rs, rt);
             return 1;
+        
+        case Q_ARG:
+            inserirVariavelNoEscopo(quad->op1, quad->op2);
+            printf("%s %s, %s, 1\n", nomeInstrucaoAssembly(addi), "$sp", "$sp");
+
+            return 1;
+        
+        case Q_LOADCONST:
+            rd = mapearParaRegistradorGeral(quad->op1);
+            printf("li %s, %d\n", rd, atoi(quad->op2));
+
+            return 1;
+
+
+        case Q_LOADVAR:
+            variavel = buscarVariavelNoEscopo(quad->op1, quad->op2);
+            rd = mapearParaRegistradorGeral(quad->op3);
+            base = baseParaEscopo(quad->op1);
+            printf("lwd %s %s %d\n", rd, base, variavel ? variavel->deslocamento : 0);
+            return 1;
+
+        case Q_STOREVAR:
+            variavel = buscarVariavelNoEscopo(quad->op3, quad->op2);
+            rs = mapearParaRegistradorGeral(quad->op1);
+            base = baseParaEscopo(quad->op3);
+            printf("swd %s %s %d\n", rs, base, variavel ? variavel->deslocamento : 0);
+            return 1;
 
         case Q_BEQ:
         case Q_BGE:
@@ -346,8 +481,8 @@ static int traduzirQuadruplaDireta(const quadrupla* quad) {
             printf("%s %s, %s, %d\n", nomeInstrucaoAssembly(asmOp), rs, rt, linhaDestino);
             return 1;
         }
-
-        case Q_JUMP: {
+        
+        case Q_JUMP:
             int linhaDestino = buscarLinhaLabel(quad->op1);
             if (linhaDestino >= 0) {
                 linhaDestino += labelOffset;
@@ -356,8 +491,29 @@ static int traduzirQuadruplaDireta(const quadrupla* quad) {
                 printf("# label %s nao encontrada; pulso de salto omitido\n", quad->op1 ? quad->op1 : "(null)");
             }
             return 1;
-        }
 
+        case Q_ALLOCAMEMVAR:
+            if (escopoEhGlobal(quad->op1)) {
+                inserirVariavelNoEscopo(quad->op1, quad->op2);
+            } else {
+                inserirVariavelNoEscopo(quad->op1, quad->op2);
+                printf("%s %s, %s, 1\n", nomeInstrucaoAssembly(addi), "$sp", "$sp");
+            }
+            return 1;
+
+        case Q_CALL:
+            if (strcmp(quad->op1, "input") == 0) {
+                // rd = mapearParaRegistradorGeral(quad->);
+                printf("%s $rf\n", nomeInstrucaoAssembly(in));
+            }
+            if (strcmp(quad->op1, "output") == 0) {
+                // rd = mapearParaRegistradorGeral(quad->);
+                printf("%s $rf\n", nomeInstrucaoAssembly(out));
+            }
+
+            return 1;
+
+        
         default:
             break;
     }
@@ -393,30 +549,26 @@ static void mapearLabelsParaLinhas(const quadList* listaQuadruplas) {
 
 void traduzirQuadruplasParaAssembly(const quadList* listaQuadruplas) {
     const quadList* atual;
-    int totalInstrucoes = 0;
 
     liberarMapaRegistradores();
+    liberarMapaEscoposVariaveis();
     mapearLabelsParaLinhas(listaQuadruplas);
 
     printf("\n*** CODIGO ASSEMBLY ***\n\n");
     /* Emite instruções iniciais: NOP e salto para a função main */
-    /* Ajustamos labelOffset para contar essas duas instruções que aparecem antes do codigo gerado */
-    labelOffset = 2; /* nop + j */
     printf("%s\n", nomeInstrucaoAssembly(nop));
     int linhaMain = buscarLinhaLabel("main");
     if (linhaMain >= 0) {
-        printf("%s %d\n", nomeInstrucaoAssembly(j), linhaMain + labelOffset);
+        printf("%s %d\n", nomeInstrucaoAssembly(j), linhaMain);
     } else {
         printf("# main nao encontrada; salto inicial omitido\n");
     }
 
     for (atual = listaQuadruplas; atual != NULL; atual = atual->prox) {
-        totalInstrucoes += traduzirQuadruplaDireta(&atual->quad);
+        traduzirQuadrupla(&atual->quad);
     }
 
-    printf("\nTotal de instrucoes diretas: %d\n", totalInstrucoes);
-    printf("\n************************\n\n");
-
     liberarMapaRegistradores();
+    liberarMapaEscoposVariaveis();
     liberarLabels();
 }
