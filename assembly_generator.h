@@ -49,6 +49,7 @@ typedef enum {
     mult,
     multi,
     divisao,
+    move,
     beq,
     bge,
     bgt,
@@ -56,9 +57,12 @@ typedef enum {
     blt,
     bne,
     j,
+    jr,
     lwd,
     swd,
     li,
+    push,
+    pop,
     in,
     out
 } AssemblyOp;
@@ -68,7 +72,7 @@ typedef enum {
     // Registradores Específicos mapeados no hardware
     $zero,  // $zero - Constante zero
     $ra,  // $ra   - Endereço de retorno (Return Address)
-    $r2,  // $r2
+    $rf,  // $rf   - Registrador de Retorno de Função
     $rp,  // $rp   - Ponteiro de Pilha (Reg. de função específica Srp)
     
     // Registradores de Propósito Geral ($r4 a $r63)

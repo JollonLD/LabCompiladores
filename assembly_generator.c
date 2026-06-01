@@ -197,18 +197,10 @@ static const char* baseParaEscopo(const char* nomeEscopo) {
 }
 
 static void adicionarLabel(const char* nome, int linha) {
-    LabelLinha* atual;
     LabelLinha* novo;
 
     if (nome == NULL || *nome == '\0')
         return;
-
-    for (atual = listaLabels; atual != NULL; atual = atual->prox) {
-        if (strcmp(atual->nome, nome) == 0) {
-            atual->linha = linha;
-            return;
-        }
-    }
 
     novo = (LabelLinha*)malloc(sizeof(LabelLinha));
     if (novo == NULL)
@@ -346,6 +338,7 @@ static const char* nomeInstrucaoAssembly(AssemblyOp op) {
         case mult: return "mult";
         case multi: return "multi";
         case divisao: return "div";
+        case move: return "move";
         case beq: return "beq";
         case bge: return "bge";
         case bgt: return "bgt";
@@ -353,6 +346,9 @@ static const char* nomeInstrucaoAssembly(AssemblyOp op) {
         case blt: return "blt";
         case bne: return "bne";
         case j: return "j";
+        case jr: return "jr";
+        case push: return "push";
+        case pop: return "pop";
         case in: return "in";
         case out: return "out";
         default: return "unk";
@@ -404,6 +400,12 @@ static int traduzirQuadrupla(const quadrupla* quad) {
 
         case Q_HALT:
             printf("%s\n", nomeInstrucaoAssembly(hlt));
+            return 1;
+
+        case Q_LABEL:
+            int linha = buscarLinhaLabel(quad->op1);
+            adicionarLabel(quad->op1, linha);
+
             return 1;
 
         case Q_ADD:
@@ -500,20 +502,54 @@ static int traduzirQuadrupla(const quadrupla* quad) {
                 printf("%s %s, %s, 1\n", nomeInstrucaoAssembly(addi), "$sp", "$sp");
             }
             return 1;
+        
+        case Q_PARAM:
+            // insere na pilha
+            rs = mapearParaRegistradorGeral(quad->op1);
+            printf("%s %s\n", nomeInstrucaoAssembly(push), rs);
+            return 1;
 
         case Q_CALL:
             if (strcmp(quad->op1, "input") == 0) {
                 // rd = mapearParaRegistradorGeral(quad->);
                 printf("%s $rf\n", nomeInstrucaoAssembly(in));
             }
-            if (strcmp(quad->op1, "output") == 0) {
-                // rd = mapearParaRegistradorGeral(quad->);
-                printf("%s $rf\n", nomeInstrucaoAssembly(out));
+            else if (strcmp(quad->op1, "output") == 0) {
+                // pega parametro
+                printf("%s $ro\n", nomeInstrucaoAssembly(pop));
+                // out $param
+                printf("out $ro\n", nomeInstrucaoAssembly(out));
+            }
+            else {
+                // Empilha $fp
+                // move $sp para $fp
+                // pega parametros e coloca no frame
+                // jal
+                // restaura $sp
+                // restaura $fp
             }
 
             return 1;
 
+        case Q_RETURN:
+            // move para registrador $rf
+            rs = mapearParaRegistradorGeral(quad->op1);
+            printf("%s $rf, %s\n", nomeInstrucaoAssembly(move), rs);
+            // jr para $ra
+            return 1;
+
+        case Q_FUNC:
+            // Salva Label da função
+            // buscarLinhaLabel(quad->op2);
+            // salva $ra
+            return 1;
         
+        case Q_ENDFUNC:
+            // insere instrução jr para $ra
+            printf("%s $ra\n", nomeInstrucaoAssembly(jr));
+            return 1;
+
+
         default:
             break;
     }

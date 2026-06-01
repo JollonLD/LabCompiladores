@@ -1,24 +1,20 @@
 nop
 j 21
-(FUNC, int, gcd, ___)
 addi $sp, $sp, 1
 addi $sp, $sp, 1
 lwd $r4 $fp 1
 li $r5, 10
 bne $r4, $r5, 11
 lwd $r6 $fp 0
-(RETURN, t2, ___, ___)
+move $rf, $r6
 j 19
-(LABEL, L0, ___, ___)
-(PARAM, t0, ___, ___)
+push $r4
 div $r7, $r6, $r4
 mult $r8, $r7, $r4
 sub $r9, $r6, $r8
-(PARAM, t5, ___, ___)
-(RETURN, $rf, ___, ___)
-(LABEL, L1, ___, ___)
-(ENDFUNC, gcd, ___, ___)
-(FUNC, void, main, ___)
+push $r9
+move $rf, $rf
+jr $ra
 addi $sp, $sp, 1
 addi $sp, $sp, 1
 in $rf
@@ -26,10 +22,11 @@ swd $rf $fp 0
 in $rf
 swd $rf $fp 1
 lwd $r10 $fp 0
-(PARAM, t6, ___, ___)
+push $r10
 lwd $r11 $fp 1
-(PARAM, t7, ___, ___)
-(PARAM, $rf, ___, ___)
-out $rf
-(ENDFUNC, main, ___, ___)
+push $r11
+push $rf
+pop $ro
+out $ro
+jr $ra
 hlt
