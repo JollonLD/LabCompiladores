@@ -1,5 +1,4 @@
 nop
-j 21
 addi $sp, $sp, 1
 addi $sp, $sp, 1
 lwd $r4 $fp 1
@@ -7,12 +6,18 @@ li $r5, 10
 bne $r4, $r5, 11
 lwd $r6 $fp 0
 move $rf, $r6
-j 19
+j 21
 push $r4
 div $r7, $r6, $r4
 mult $r8, $r7, $r4
 sub $r9, $r6, $r8
 push $r9
+swd $fp, $sp, 0
+move $fp, $sp
+addi $sp, $sp, 1
+jal 2
+move $sp, $fp
+lwd $fp, $fp, 0
 move $rf, $rf
 jr $ra
 addi $sp, $sp, 1
@@ -25,6 +30,12 @@ lwd $r10 $fp 0
 push $r10
 lwd $r11 $fp 1
 push $r11
+swd $fp, $sp, 0
+move $fp, $sp
+addi $sp, $sp, 1
+jal 2
+move $sp, $fp
+lwd $fp, $fp, 0
 push $rf
 pop $ro
 out $ro

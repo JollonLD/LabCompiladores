@@ -58,6 +58,7 @@ typedef enum {
     bne,
     j,
     jr,
+    jal,
     lwd,
     swd,
     li,

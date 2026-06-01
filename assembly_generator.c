@@ -347,6 +347,9 @@ static const char* nomeInstrucaoAssembly(AssemblyOp op) {
         case bne: return "bne";
         case j: return "j";
         case jr: return "jr";
+        case jal: return "jal";
+        case lwd: return "lwd";
+        case swd: return "swd";
         case push: return "push";
         case pop: return "pop";
         case in: return "in";
@@ -521,12 +524,26 @@ static int traduzirQuadrupla(const quadrupla* quad) {
                 printf("out $ro\n", nomeInstrucaoAssembly(out));
             }
             else {
-                // Empilha $fp
+                int nParams = atoi(quad->op1);
+                int linhaFunc = buscarLinhaLabel(quad->op1);
+                // Salva $fp
+                printf("%s $fp, $sp, 0\n", nomeInstrucaoAssembly(swd));
                 // move $sp para $fp
+                printf("%s $fp, $sp\n", nomeInstrucaoAssembly(move));
+                // espaço para $ra
+                printf("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(addi)); 
                 // pega parametros e coloca no frame
+                for (int i = 0; i < nParams; i++) {
+                    printf("%s $rf\n", nomeInstrucaoAssembly(pop));
+                    printf("%s $rf, $fp, %d\n", nomeInstrucaoAssembly(swd), (nParams - i + 1));
+                }
                 // jal
+                printf("%s %d\n", nomeInstrucaoAssembly(jal), linhaFunc);
                 // restaura $sp
+                printf("%s $sp, $fp\n", nomeInstrucaoAssembly(move));
                 // restaura $fp
+                printf("%s $fp, $fp, 0\n", nomeInstrucaoAssembly(lwd));
+
             }
 
             return 1;
