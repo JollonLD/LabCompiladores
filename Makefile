@@ -16,6 +16,8 @@ CODEGEN_SRC = code_generator.c
 CODEGEN_HDR = code_generator.h
 ASM_SRC = assembly_generator.c
 ASM_HDR = assembly_generator.h
+BIN_SRC = binary_generator.c
+BIN_HDR = binary_generator.h
 
 # Arquivos gerados
 LEX_GEN = lex.yy.c
@@ -26,6 +28,7 @@ YACC_GEN_H = cminus.tab.h
 CONTEXT_OBJ = parser_context.o
 CODEGEN_OBJ = code_generator.o
 ASM_OBJ = assembly_generator.o
+BIN_OBJ = binary_generator.o
 LEX_OBJ = lex.yy.o
 YACC_OBJ = cminus.tab.o
 
@@ -106,8 +109,12 @@ $(CODEGEN_OBJ): $(CODEGEN_SRC) $(CODEGEN_HDR) $(ASM_HDR) $(YACC_GEN_H) $(CONTEXT
 	$(CC) $(CFLAGS) -c $(CODEGEN_SRC) -o $(CODEGEN_OBJ)
 
 # Compila assembly_generator.c
-$(ASM_OBJ): $(ASM_SRC) $(ASM_HDR) $(CODEGEN_HDR)
+$(ASM_OBJ): $(ASM_SRC) $(ASM_HDR) $(CODEGEN_HDR) $(BIN_HDR)
 	$(CC) $(CFLAGS) -c $(ASM_SRC) -o $(ASM_OBJ)
+
+# Compila binary_generator.c
+$(BIN_OBJ): $(BIN_SRC) $(BIN_HDR)
+	$(CC) $(CFLAGS) -c $(BIN_SRC) -o $(BIN_OBJ)
 
 # Compila o analisador léxico
 $(LEX_OBJ): $(LEX_GEN)
@@ -118,13 +125,13 @@ $(YACC_OBJ): $(YACC_GEN_C) $(YACC_GEN_H) $(CONTEXT_HDR)
 	$(CC) $(CFLAGS) -c $(YACC_GEN_C) -o $(YACC_OBJ)
 
 # Compila o executável final
-$(TARGET): $(LEX_OBJ) $(YACC_OBJ) $(CONTEXT_OBJ) $(CODEGEN_OBJ) $(ASM_OBJ)
-	$(CC) $(CFLAGS) -o $(TARGET) $(LEX_OBJ) $(YACC_OBJ) $(CONTEXT_OBJ) $(CODEGEN_OBJ) $(ASM_OBJ)
+$(TARGET): $(LEX_OBJ) $(YACC_OBJ) $(CONTEXT_OBJ) $(CODEGEN_OBJ) $(ASM_OBJ) $(BIN_OBJ)
+	$(CC) $(CFLAGS) -o $(TARGET) $(LEX_OBJ) $(YACC_OBJ) $(CONTEXT_OBJ) $(CODEGEN_OBJ) $(ASM_OBJ) $(BIN_OBJ)
 
 # Limpa arquivos gerados
 clean:
 	rm -f $(LEX_GEN) $(YACC_GEN_C) $(YACC_GEN_H) $(TARGET)
-	rm -f $(CONTEXT_OBJ) $(CODEGEN_OBJ) $(YACC_OBJ) $(LEX_OBJ)
+	rm -f $(CONTEXT_OBJ) $(CODEGEN_OBJ) $(ASM_OBJ) $(BIN_OBJ) $(YACC_OBJ) $(LEX_OBJ)
 	rm -f *.exe *.o
 	rm -f ast.dot ast_*.dot ast.png ast_*.png ast.svg ast_*.svg
 

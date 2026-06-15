@@ -1,21 +1,13 @@
-/* Programa com erros semânticos para teste */
-
-int main(void) {
+void main () {
     int x;
-    void @y;        /* ERRO: variável não pode ser void */
-    int arr[10];
+    x = input();
 
-    x = 5;
-    y = 10;        /* ERRO: y é void */
-    arr = 20;      /* ERRO: não pode atribuir a array completo */
-
-    z = x + 1;     /* ERRO: z não foi declarado */
-
-    if (arr) {     /* ERRO: condição deve usar array indexado */
-        x = arr;   /* ERRO: uso de array sem indexação */
+    if (x < 3) {
+        x = x + 2;
+        output(x);
     }
-
-    x = arr[x];    /* OK */
-
-    return x;
+    else {
+        x = x - 2;
+        output(x);
+    }
 }

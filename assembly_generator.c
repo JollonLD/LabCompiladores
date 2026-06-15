@@ -1,7 +1,11 @@
 #include "assembly_generator.h"
+#include "binary_generator.h"
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+
+#define ARQUIVO_SAIDA_ASM "saida_asm.txt"
 
 typedef struct LabelLinha {
     char* nome;
@@ -33,7 +37,17 @@ static LabelLinha* listaLabels = NULL;
 static MapaRegistrador* mapaRegistradores = NULL;
 static EscopoVariavel* listaEscoposVariaveis = NULL;
 static int proximoRegistradorGeral = 4;
-static int labelOffset = 0; /* offset para ajustar destinos de salto (instrucoes iniciais) */
+static char escopoTraducaoAtual[128] = "global";
+static FILE* arquivoSaidaAssembly = NULL;
+
+static void asmPrint(const char* formato, ...) {
+    va_list args;
+
+    va_start(args, formato);
+    if (arquivoSaidaAssembly != NULL)
+        vfprintf(arquivoSaidaAssembly, formato, args);
+    va_end(args);
+}
 
 static char* duplicarTexto(const char* texto) {
     char* copia;
@@ -98,6 +112,10 @@ static void liberarMapaEscoposVariaveis(void) {
     listaEscoposVariaveis = NULL;
 }
 
+static int escopoEhGlobal(const char* nomeEscopo) {
+    return nomeEscopo == NULL || strcmp(nomeEscopo, "global") == 0;
+}
+
 static EscopoVariavel* buscarEscopoVariavel(const char* nomeEscopo) {
     EscopoVariavel* atual;
 
@@ -123,7 +141,10 @@ static EscopoVariavel* adicionarEscopoVariavel(const char* nomeEscopo) {
     }
 
     novo->variaveis = NULL;
-    novo->proximoDeslocamento = 0;
+    
+    /* MUDANÇA: Se não for escopo global, o offset inicia em 2. 
+       Isso reserva: $fp+0 para Old FP, e $fp+1 para PC Return Address ($ra) */
+    novo->proximoDeslocamento = escopoEhGlobal(nomeEscopo) ? 0 : 2;
     novo->prox = listaEscoposVariaveis;
     listaEscoposVariaveis = novo;
 
@@ -163,10 +184,6 @@ static int inserirVariavelNoEscopo(const char* nomeEscopo, const char* nomeVaria
     novaVariavel->prox = escopo->variaveis;
     escopo->variaveis = novaVariavel;
     return 1;
-}
-
-static int escopoEhGlobal(const char* nomeEscopo) {
-    return nomeEscopo == NULL || strcmp(nomeEscopo, "global") == 0;
 }
 
 static const VariavelEscopo* buscarVariavelNoEscopo(const char* nomeEscopo, const char* nomeVariavel) {
@@ -363,7 +380,7 @@ static int operandoValido(const char* operando) {
 }
 
 static void emitirComentarioMemoria(const quadrupla* quad) {
-    printf("# TODO memoria: (%s, %s, %s, %s)\n",
+    asmPrint("# TODO memoria: (%s, %s, %s, %s)\n",
            operandoValido(quad->opr) ? quad->opr : "___",
            operandoValido(quad->op1) ? quad->op1 : "___",
            operandoValido(quad->op2) ? quad->op2 : "___",
@@ -398,11 +415,11 @@ static int traduzirQuadrupla(const quadrupla* quad) {
 
     switch (op) {
         case Q_NOP:
-            printf("%s\n", nomeInstrucaoAssembly(nop));
+            asmPrint("%s\n", nomeInstrucaoAssembly(nop));
             return 1;
 
         case Q_HALT:
-            printf("%s\n", nomeInstrucaoAssembly(hlt));
+            asmPrint("%s\n", nomeInstrucaoAssembly(hlt));
             return 1;
 
         case Q_LABEL:
@@ -415,45 +432,44 @@ static int traduzirQuadrupla(const quadrupla* quad) {
             rd = mapearParaRegistradorGeral(quad->op3);
             rs = mapearParaRegistradorGeral(quad->op1);
             if (ehNumero(quad->op2))
-                printf("%s %s, %s, %s\n", nomeInstrucaoAssembly(addi), rd, rs, quad->op2);
+                asmPrint("%s %s, %s, %s\n", nomeInstrucaoAssembly(addi), rd, rs, quad->op2);
             else
-                printf("%s %s, %s, %s\n", nomeInstrucaoAssembly(add), rd, rs, mapearParaRegistradorGeral(quad->op2));
+                asmPrint("%s %s, %s, %s\n", nomeInstrucaoAssembly(add), rd, rs, mapearParaRegistradorGeral(quad->op2));
             return 1;
 
         case Q_SUB:
             rd = mapearParaRegistradorGeral(quad->op3);
             rs = mapearParaRegistradorGeral(quad->op1);
             if (ehNumero(quad->op2))
-                printf("%s %s, %s, %s\n", nomeInstrucaoAssembly(subi), rd, rs, quad->op2);
+                asmPrint("%s %s, %s, %s\n", nomeInstrucaoAssembly(subi), rd, rs, quad->op2);
             else
-                printf("%s %s, %s, %s\n", nomeInstrucaoAssembly(sub), rd, rs, mapearParaRegistradorGeral(quad->op2));
+                asmPrint("%s %s, %s, %s\n", nomeInstrucaoAssembly(sub), rd, rs, mapearParaRegistradorGeral(quad->op2));
             return 1;
 
         case Q_MULT:
             rd = mapearParaRegistradorGeral(quad->op3);
             rs = mapearParaRegistradorGeral(quad->op1);
             if (ehNumero(quad->op2))
-                printf("%s %s, %s, %s\n", nomeInstrucaoAssembly(multi), rd, rs, quad->op2);
+                asmPrint("%s %s, %s, %s\n", nomeInstrucaoAssembly(multi), rd, rs, quad->op2);
             else
-                printf("%s %s, %s, %s\n", nomeInstrucaoAssembly(mult), rd, rs, mapearParaRegistradorGeral(quad->op2));
+                asmPrint("%s %s, %s, %s\n", nomeInstrucaoAssembly(mult), rd, rs, mapearParaRegistradorGeral(quad->op2));
             return 1;
 
         case Q_DIV:
             rd = mapearParaRegistradorGeral(quad->op3);
             rs = mapearParaRegistradorGeral(quad->op1);
             rt = mapearParaRegistradorGeral(quad->op2);
-            printf("%s %s, %s, %s\n", nomeInstrucaoAssembly(divisao), rd, rs, rt);
+            asmPrint("%s %s, %s, %s\n", nomeInstrucaoAssembly(divisao), rd, rs, rt);
             return 1;
         
         case Q_ARG:
             inserirVariavelNoEscopo(quad->op2, quad->op1);
-            printf("%s %s, %s, 1\n", nomeInstrucaoAssembly(addi), "$sp", "$sp");
-
+            asmPrint("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(addi));
             return 1;
         
         case Q_LOADCONST:
             rd = mapearParaRegistradorGeral(quad->op1);
-            printf("li %s, %d\n", rd, atoi(quad->op2));
+            asmPrint("li %s, %d\n", rd, atoi(quad->op2));
 
             return 1;
 
@@ -462,14 +478,14 @@ static int traduzirQuadrupla(const quadrupla* quad) {
             variavel = buscarVariavelNoEscopo(quad->op1, quad->op2);
             rd = mapearParaRegistradorGeral(quad->op3);
             base = baseParaEscopo(quad->op1);
-            printf("lwd %s %s %d\n", rd, base, variavel ? variavel->deslocamento : 0);
+            asmPrint("lwd %s %s %d\n", rd, base, variavel ? variavel->deslocamento : 0);
             return 1;
 
         case Q_STOREVAR:
             variavel = buscarVariavelNoEscopo(quad->op3, quad->op2);
             rs = mapearParaRegistradorGeral(quad->op1);
             base = baseParaEscopo(quad->op3);
-            printf("swd %s %s %d\n", rs, base, variavel ? variavel->deslocamento : 0);
+            asmPrint("swd %s %s %d\n", rs, base, variavel ? variavel->deslocamento : 0);
             return 1;
 
         case Q_BEQ:
@@ -479,91 +495,139 @@ static int traduzirQuadrupla(const quadrupla* quad) {
         case Q_BLT:
         case Q_BNE: {
             AssemblyOp asmOp = branchOuSaltoAsm(op);
-                    int linhaDestino = buscarLinhaLabel(quad->op3);
-                    if (linhaDestino >= 0) linhaDestino += labelOffset;
+            int linhaDestino = buscarLinhaLabel(quad->op3);
             rs = mapearParaRegistradorGeral(quad->op1);
             rt = mapearParaRegistradorGeral(quad->op2);
-            printf("%s %s, %s, %d\n", nomeInstrucaoAssembly(asmOp), rs, rt, linhaDestino);
+            asmPrint("%s %s, %s, %d\n", nomeInstrucaoAssembly(asmOp), rs, rt, linhaDestino);
             return 1;
         }
         
-        case Q_JUMP:
+        case Q_JUMP: {
             int linhaDestino = buscarLinhaLabel(quad->op1);
             if (linhaDestino >= 0) {
-                linhaDestino += labelOffset;
-                printf("%s %d\n", nomeInstrucaoAssembly(j), linhaDestino);
+                asmPrint("%s %d\n", nomeInstrucaoAssembly(j), linhaDestino);
             } else {
-                printf("# label %s nao encontrada; pulso de salto omitido\n", quad->op1 ? quad->op1 : "(null)");
+                asmPrint("# label %s nao encontrada; salto omitido\n", quad->op1 ? quad->op1 : "(null)");
             }
             return 1;
+        }
 
         case Q_ALLOCAMEMVAR:
-            if (escopoEhGlobal(quad->op1)) {
-                inserirVariavelNoEscopo(quad->op1, quad->op2);
+            inserirVariavelNoEscopo(quad->op1, quad->op2);
+            if (!escopoEhGlobal(quad->op1))
+                asmPrint("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(addi));
+            return 1;
+            
+        case Q_ALLOCAMEMVET: {
+            int tamanho = atoi(quad->op3);
+            inserirVariavelNoEscopo(quad->op1, quad->op2);
+            if (!escopoEhGlobal(quad->op1)) {
+                EscopoVariavel* esc = buscarEscopoVariavel(quad->op1);
+                if (esc) esc->proximoDeslocamento += (tamanho - 1);
+                asmPrint("%s $sp, $sp, %d\n", nomeInstrucaoAssembly(addi), tamanho);
             } else {
-                inserirVariavelNoEscopo(quad->op1, quad->op2);
-                printf("%s %s, %s, 1\n", nomeInstrucaoAssembly(addi), "$sp", "$sp");
+                EscopoVariavel* esc = buscarEscopoVariavel("global");
+                if (esc) esc->proximoDeslocamento += (tamanho - 1);
             }
             return 1;
+        }
+
+        case Q_LOADVET: {
+            asmPrint("# TODO: Instrucao LOADVET\n"); 
+            return 1;
+        }
+
+        case Q_STOREVET: {
+            asmPrint("# TODO: Instrucao STOREVET\n"); 
+            return 1;
+        }
         
         case Q_PARAM:
-            // insere na pilha
+            // O chamador empilha o argumento
             rs = mapearParaRegistradorGeral(quad->op1);
-            printf("%s %s\n", nomeInstrucaoAssembly(push), rs);
+            asmPrint("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(addi));
+            asmPrint("%s %s, $sp, 0\n", nomeInstrucaoAssembly(swd), rs);
+            
             return 1;
 
         case Q_CALL:
             if (strcmp(quad->op1, "input") == 0) {
-                // rd = mapearParaRegistradorGeral(quad->);
-                printf("%s $rf\n", nomeInstrucaoAssembly(in));
+                asmPrint("%s $rf\n", nomeInstrucaoAssembly(in));
             }
             else if (strcmp(quad->op1, "output") == 0) {
-                // pega parametro
-                printf("%s $ro\n", nomeInstrucaoAssembly(pop));
-                // out $param
-                printf("out $ro\n", nomeInstrucaoAssembly(out));
+                asmPrint("%s $ro\n", nomeInstrucaoAssembly(pop));
+                asmPrint("%s $ro\n", nomeInstrucaoAssembly(out));
             }
             else {
-                int nParams = atoi(quad->op1);
+                int nParams = quad->op2 ? atoi(quad->op2) : 0;
                 int linhaFunc = buscarLinhaLabel(quad->op1);
-                // Salva $fp
-                printf("%s $fp, $sp, 0\n", nomeInstrucaoAssembly(swd));
-                // move $sp para $fp
-                printf("%s $fp, $sp\n", nomeInstrucaoAssembly(move));
-                // espaço para $ra
-                printf("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(addi)); 
-                // pega parametros e coloca no frame
+                
+                // 1. Reserva slot acima dos argumentos empilhados por PARAM
+                asmPrint("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(addi));
+                
+                // 2. Salva o $fp atual do chamador na base do frame
+                asmPrint("%s $fp, $sp, 0\n", nomeInstrucaoAssembly(swd));
+                
+                // 3. Transfere a base do novo frame para o $fp
+                asmPrint("%s $fp, $sp\n", nomeInstrucaoAssembly(move));
+                
+                // 4. Reposiciona $sp no topo dos argumentos empilhados
+                asmPrint("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(subi));
+                
+                // 5. Pega os parâmetros do Q_PARAM e salva no novo frame
                 for (int i = 0; i < nParams; i++) {
-                    printf("%s $rf\n", nomeInstrucaoAssembly(pop));
-                    printf("%s $rf, $fp, %d\n", nomeInstrucaoAssembly(swd), (nParams - i + 1));
+                    asmPrint("%s $rf, $sp, 0\n", nomeInstrucaoAssembly(lwd));
+                    asmPrint("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(subi));
+
+                    // Os argumentos iniciam no offset 2 em diante
+                    asmPrint("%s $rf, $fp, %d\n", nomeInstrucaoAssembly(swd), (nParams - i + 1));
                 }
-                // jal
-                printf("%s %d\n", nomeInstrucaoAssembly(jal), linhaFunc);
-                // restaura $sp
-                printf("%s $sp, $fp\n", nomeInstrucaoAssembly(move));
-                // restaura $fp
-                printf("%s $fp, $fp, 0\n", nomeInstrucaoAssembly(lwd));
+                
+                // 6. Chamada de função
+                if (linhaFunc >= 0) {
+                    asmPrint("%s %d\n", nomeInstrucaoAssembly(jal), linhaFunc);
+                } else {
+                    asmPrint("# label %s nao encontrada; chamada omitida\n", quad->op1);
+                }
+                
+                // 7. Restaura a pilha apagando as variáveis locais e argumentos (Frame Teardown)
+                asmPrint("%s $sp, $fp\n", nomeInstrucaoAssembly(move));
+                
+                // 8. Restaura o Frame Pointer original do chamador
+                asmPrint("%s $fp, $fp, 0\n", nomeInstrucaoAssembly(lwd));
 
+                // 9. Reposiciona $sp acima das variaveis locais do chamador
+                {
+                    EscopoVariavel* escopoChamador = buscarEscopoVariavel(escopoTraducaoAtual);
+                    if (escopoChamador != NULL)
+                        asmPrint("%s $sp, $fp, %d\n", nomeInstrucaoAssembly(addi), escopoChamador->proximoDeslocamento);
+                }
             }
-
-            return 1;
-
-        case Q_RETURN:
-            // move para registrador $rf
-            rs = mapearParaRegistradorGeral(quad->op1);
-            printf("%s $rf, %s\n", nomeInstrucaoAssembly(move), rs);
-            // jr para $ra
             return 1;
 
         case Q_FUNC:
-            // Salva Label da função
-            // buscarLinhaLabel(quad->op2);
-            // salva $ra
+            if (quad->op2 != NULL)
+                strncpy(escopoTraducaoAtual, quad->op2, sizeof(escopoTraducaoAtual) - 1);
+            escopoTraducaoAtual[sizeof(escopoTraducaoAtual) - 1] = '\0';
+            // Salva $ra e posiciona $sp logo apos o cabecalho do frame ($fp+0 e $fp+1)
+            asmPrint("%s $ra, $fp, 1\n", nomeInstrucaoAssembly(swd));
+            asmPrint("%s $sp, $fp, 2\n", nomeInstrucaoAssembly(addi));
+            return 1;
+            
+        case Q_RETURN:
+            // Verifica se a função possui retorno válido
+            if (operandoValido(quad->op1)) {
+                rs = mapearParaRegistradorGeral(quad->op1);
+                asmPrint("%s $rf, %s\n", nomeInstrucaoAssembly(move), rs);
+            }
+            
             return 1;
         
         case Q_ENDFUNC:
-            // insere instrução jr para $ra
-            printf("%s $ra\n", nomeInstrucaoAssembly(jr));
+            strcpy(escopoTraducaoAtual, "global");
+            // Restaura o Return Address ($ra) e volta pro chamador caso atinja fim da função sem return
+            asmPrint("%s $ra, $fp, 1\n", nomeInstrucaoAssembly(lwd));
+            asmPrint("%s $ra\n", nomeInstrucaoAssembly(jr));
             return 1;
 
 
@@ -571,7 +635,7 @@ static int traduzirQuadrupla(const quadrupla* quad) {
             break;
     }
 
-    printf("(%s, %s, %s, %s)\n",
+    asmPrint("(%s, %s, %s, %s)\n",
            operandoValido(quad->opr) ? quad->opr : "___",
            operandoValido(quad->op1) ? quad->op1 : "___",
            operandoValido(quad->op2) ? quad->op2 : "___",
@@ -579,9 +643,74 @@ static int traduzirQuadrupla(const quadrupla* quad) {
     return 0;
 }
 
+static int contarInstrucoesAssembly(const quadrupla* quad) {
+    QuadruplaOp op = operadorQuadrupla(quad->opr);
+
+    switch (op) {
+        case Q_NOP:
+        case Q_HALT:
+        case Q_ADD:
+        case Q_SUB:
+        case Q_MULT:
+        case Q_DIV:
+        case Q_ARG:
+        case Q_LOADCONST:
+        case Q_LOADVAR:
+        case Q_STOREVAR:
+        case Q_BEQ:
+        case Q_BGE:
+        case Q_BGT:
+        case Q_BLE:
+        case Q_BLT:
+        case Q_BNE:
+        case Q_JUMP:
+        case Q_LOADVET:
+        case Q_STOREVET:
+            return 1;
+
+        case Q_PARAM:
+            return 2; // addi $sp + swd argumento
+
+        case Q_FUNC:
+            return 2; // swd $ra + addi $sp, $fp, 2
+
+        case Q_ENDFUNC:
+            return 2; // lwd $ra + jr
+
+        case Q_RETURN:
+            return operandoValido(quad->op1) ? 1 : 0; // move $rf (se houver)
+
+        case Q_ALLOCAMEMVAR:
+            return escopoEhGlobal(quad->op1) ? 0 : 1;
+
+        case Q_ALLOCAMEMVET:
+            return escopoEhGlobal(quad->op1) ? 0 : 1;
+
+        case Q_CALL:
+            if (strcmp(quad->op1, "input") == 0)
+                return 1;
+            if (strcmp(quad->op1, "output") == 0)
+                return 2;
+
+            {
+                int nParams = quad->op2 ? atoi(quad->op2) : 0;
+                /* addi + swd + move + subi + (lwd + subi + swd) * n + jal + move + lwd + addi */
+                return 8 + (nParams * 3);
+            }
+
+        case Q_LABEL:
+            return 0;
+
+        default:
+            return 0;
+    }
+}
+
 static void mapearLabelsParaLinhas(const quadList* listaQuadruplas) {
     const quadList* atual;
-    int linhaAtual = 1;
+    
+    /* Inicia em 2 porque as instruções 'nop' e 'j main' vão ocupar as linhas 0 e 1 */
+    int linhaAtual = 2; 
 
     liberarLabels();
 
@@ -595,33 +724,49 @@ static void mapearLabelsParaLinhas(const quadList* listaQuadruplas) {
                 adicionarLabel(atual->quad.op2, linhaAtual);
         }
 
-        /* conta uma linha de saída para esta quádrupla */
-        linhaAtual++;
+        /* Incrementa de acordo com as instruções assembly REAIS que serão geradas */
+        linhaAtual += contarInstrucoesAssembly(&atual->quad);
     }
 }
 
+
 void traduzirQuadruplasParaAssembly(const quadList* listaQuadruplas) {
     const quadList* atual;
+    int linhaMain;
 
     liberarMapaRegistradores();
     liberarMapaEscoposVariaveis();
+    strcpy(escopoTraducaoAtual, "global");
     mapearLabelsParaLinhas(listaQuadruplas);
 
-    printf("\n*** CODIGO ASSEMBLY ***\n\n");
-    /* Emite instruções iniciais: NOP e salto para a função main */
-    printf("%s\n", nomeInstrucaoAssembly(nop));
-    int linhaMain = buscarLinhaLabel("main");
-    if (linhaMain >= 0) {
-        printf("%s %d\n", nomeInstrucaoAssembly(j), linhaMain);
-    } else {
-        printf("# main nao encontrada; salto inicial omitido\n");
+    arquivoSaidaAssembly = fopen(ARQUIVO_SAIDA_ASM, "w");
+    if (arquivoSaidaAssembly == NULL) {
+        fprintf(stderr, "ERRO: nao foi possivel criar %s\n", ARQUIVO_SAIDA_ASM);
+        return;
     }
 
-    for (atual = listaQuadruplas; atual != NULL; atual = atual->prox) {
+    asmPrint("%s\n", nomeInstrucaoAssembly(nop));
+    linhaMain = buscarLinhaLabel("main");
+    if (linhaMain >= 0)
+        asmPrint("%s %d\n", nomeInstrucaoAssembly(j), linhaMain);
+    else
+        asmPrint("# main nao encontrada; salto inicial omitido\n");
+
+    for (atual = listaQuadruplas; atual != NULL; atual = atual->prox)
         traduzirQuadrupla(&atual->quad);
-    }
+
+    fclose(arquivoSaidaAssembly);
+    arquivoSaidaAssembly = NULL;
 
     liberarMapaRegistradores();
     liberarMapaEscoposVariaveis();
     liberarLabels();
+
+    printf("\n*** CODIGO ASSEMBLY ***\n");
+    printf("Arquivo gerado: %s\n", ARQUIVO_SAIDA_ASM);
+
+    if (traduzirArquivoAssemblyParaBinario(ARQUIVO_SAIDA_ASM, "saida_bin.txt"))
+        printf("Arquivo binario gerado: saida_bin.txt\n");
+    else
+        fprintf(stderr, "ERRO: falha ao gerar saida_bin.txt\n");
 }

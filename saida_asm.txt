@@ -1,43 +1,71 @@
 nop
+j 36
+swd $ra, $fp, 1
+addi $sp, $fp, 2
 addi $sp, $sp, 1
 addi $sp, $sp, 1
-lwd $r4 $fp 1
+lwd $r4 $fp 3
 li $r5, 10
-bne $r4, $r5, 11
-lwd $r6 $fp 0
+bne $r4, $r5, 12
+lwd $r6 $fp 2
 move $rf, $r6
-j 21
-push $r4
+j 34
+addi $sp, $sp, 1
+swd $r4, $sp, 0
 div $r7, $r6, $r4
 mult $r8, $r7, $r4
 sub $r9, $r6, $r8
-push $r9
+addi $sp, $sp, 1
+swd $r9, $sp, 0
+addi $sp, $sp, 1
 swd $fp, $sp, 0
 move $fp, $sp
-addi $sp, $sp, 1
+subi $sp, $sp, 1
+lwd $rf, $sp, 0
+subi $sp, $sp, 1
+swd $rf, $fp, 3
+lwd $rf, $sp, 0
+subi $sp, $sp, 1
+swd $rf, $fp, 2
 jal 2
 move $sp, $fp
 lwd $fp, $fp, 0
+addi $sp, $fp, 4
 move $rf, $rf
+lwd $ra, $fp, 1
 jr $ra
+swd $ra, $fp, 1
+addi $sp, $fp, 2
 addi $sp, $sp, 1
 addi $sp, $sp, 1
 in $rf
-swd $rf $fp 0
+swd $rf $fp 2
 in $rf
-swd $rf $fp 1
-lwd $r10 $fp 0
-push $r10
-lwd $r11 $fp 1
-push $r11
+swd $rf $fp 3
+lwd $r10 $fp 2
+addi $sp, $sp, 1
+swd $r10, $sp, 0
+lwd $r11 $fp 3
+addi $sp, $sp, 1
+swd $r11, $sp, 0
+addi $sp, $sp, 1
 swd $fp, $sp, 0
 move $fp, $sp
-addi $sp, $sp, 1
+subi $sp, $sp, 1
+lwd $rf, $sp, 0
+subi $sp, $sp, 1
+swd $rf, $fp, 3
+lwd $rf, $sp, 0
+subi $sp, $sp, 1
+swd $rf, $fp, 2
 jal 2
 move $sp, $fp
 lwd $fp, $fp, 0
-push $rf
+addi $sp, $fp, 4
+addi $sp, $sp, 1
+swd $rf, $sp, 0
 pop $ro
 out $ro
+lwd $ra, $fp, 1
 jr $ra
 hlt

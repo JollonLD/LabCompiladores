@@ -95,17 +95,27 @@ static void emitirQuadrupla(const char* opr, const char* op1, const char* op2, c
     adicionarQuadrupla(opr, op1, op2, op3);
 }
 
+#define ARQUIVO_SAIDA_QUAD "saida_quad.txt"
+
 static void imprimirQuadruplas(void) {
     quadList* atual = listaQuadruplas;
+    FILE* arquivo = fopen(ARQUIVO_SAIDA_QUAD, "w");
+
+    if (arquivo == NULL) {
+        fprintf(stderr, "ERRO: nao foi possivel criar %s\n", ARQUIVO_SAIDA_QUAD);
+        return;
+    }
 
     while (atual != NULL) {
-        printf("(%s, %s, %s, %s)\n",
-               atual->quad.opr,
-               atual->quad.op1,
-               atual->quad.op2,
-               atual->quad.op3);
+        fprintf(arquivo, "(%s, %s, %s, %s)\n",
+                atual->quad.opr,
+                atual->quad.op1,
+                atual->quad.op2,
+                atual->quad.op3);
         atual = atual->prox;
     }
+
+    fclose(arquivo);
 }
 
 static void liberarQuadruplas(void) {
@@ -808,9 +818,10 @@ void codeGen(TreeNode* arvoreSintatica) {
     listaQuadruplas = NULL;
     ultimaQuadrupla = NULL;
 
-    printf("\n*** CODIGO INTERMEDIARIO QUADRUPLAS ***\n\n");
+    printf("\n*** CODIGO INTERMEDIARIO QUADRUPLAS ***\n");
     percorrerArvore(arvoreSintatica);
     imprimirQuadruplas();
+    printf("Arquivo gerado: %s\n", ARQUIVO_SAIDA_QUAD);
     traduzirQuadruplasParaAssembly(listaQuadruplas);
     printf("\n******************************************\n\n");
 
