@@ -1,0 +1,15 @@
+int soma(int a) {
+    int x;
+    x = a + 2;
+
+    return x;
+}
+
+void main(void) {
+    int r;
+    int b;
+    b = 42;
+    output(b);
+    r = soma(b);
+    output(r);
+}

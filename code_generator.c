@@ -18,6 +18,10 @@ static char* gerarExpressao(TreeNode* no);
 static void gerarComando(TreeNode* no);
 static void gerarComandoExpressao(TreeNode* no);
 
+static int comandoEhReturn(TreeNode* no) {
+    return no != NULL && no->nodekind == STMTK && no->kind.stmt == RETURNK;
+}
+
 typedef struct VarList {
     char* var;
     char* temp;
@@ -582,8 +586,10 @@ static void gerarComando(TreeNode* no) {
                 
                 // Tem else
                 if (no->child[2] != NULL) {
-                    // salto para Fim dentro do If
-                    emitirQuadrupla("JUMP", labelFim, "___", "___");
+                    if (!comandoEhReturn(no->child[1]))
+                        emitirQuadrupla("JUMP", labelFim, "___", "___");
+                    /* Variaveis carregadas no then nao existem no else em tempo de execucao. */
+                    resetarCachesReuso();
                     // começo do Else
                     emitirQuadrupla("LABEL", labelFalso, "___", "___");
                     gerarComando(no->child[2]);

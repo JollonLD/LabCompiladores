@@ -39,6 +39,30 @@ static EscopoVariavel* listaEscoposVariaveis = NULL;
 static int proximoRegistradorGeral = 4;
 static char escopoTraducaoAtual[128] = "global";
 static FILE* arquivoSaidaAssembly = NULL;
+static const quadList* listaQuadruplasAtual = NULL;
+
+static int ehQuadrupla(const char* opr, const char* esperado);
+
+static int funcaoPossuiReturn(const char* nomeFunc) {
+    const quadList* p;
+    int dentro = 0;
+
+    if (nomeFunc == NULL || listaQuadruplasAtual == NULL)
+        return 0;
+
+    for (p = listaQuadruplasAtual; p != NULL; p = p->prox) {
+        if (ehQuadrupla(p->quad.opr, "FUNC")) {
+            dentro = (p->quad.op2 != NULL && strcmp(p->quad.op2, nomeFunc) == 0);
+        } else if (dentro && ehQuadrupla(p->quad.opr, "ENDFUNC")) {
+            if (p->quad.op1 != NULL && strcmp(p->quad.op1, nomeFunc) == 0)
+                break;
+        } else if (dentro && ehQuadrupla(p->quad.opr, "RETURN")) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
 
 static void asmPrint(const char* formato, ...) {
     va_list args;
@@ -114,6 +138,10 @@ static void liberarMapaEscoposVariaveis(void) {
 
 static int escopoEhGlobal(const char* nomeEscopo) {
     return nomeEscopo == NULL || strcmp(nomeEscopo, "global") == 0;
+}
+
+static int ehFuncaoMain(const char* nome) {
+    return nome != NULL && strcmp(nome, "main") == 0;
 }
 
 static EscopoVariavel* buscarEscopoVariavel(const char* nomeEscopo) {
@@ -610,25 +638,28 @@ static int traduzirQuadrupla(const quadrupla* quad) {
             if (quad->op2 != NULL)
                 strncpy(escopoTraducaoAtual, quad->op2, sizeof(escopoTraducaoAtual) - 1);
             escopoTraducaoAtual[sizeof(escopoTraducaoAtual) - 1] = '\0';
-            // Salva $ra e posiciona $sp logo apos o cabecalho do frame ($fp+0 e $fp+1)
-            asmPrint("%s $ra, $fp, 1\n", nomeInstrucaoAssembly(swd));
+            if (!ehFuncaoMain(quad->op2))
+                asmPrint("%s $ra, $fp, 1\n", nomeInstrucaoAssembly(swd));
             asmPrint("%s $sp, $fp, 2\n", nomeInstrucaoAssembly(addi));
             return 1;
             
         case Q_RETURN:
-            // Verifica se a função possui retorno válido
             if (operandoValido(quad->op1)) {
                 rs = mapearParaRegistradorGeral(quad->op1);
                 asmPrint("%s $rf, %s\n", nomeInstrucaoAssembly(move), rs);
             }
-            
+            if (!ehFuncaoMain(escopoTraducaoAtual)) {
+                asmPrint("%s $ra, $fp, 1\n", nomeInstrucaoAssembly(lwd));
+                asmPrint("%s $ra\n", nomeInstrucaoAssembly(jr));
+            }
             return 1;
         
         case Q_ENDFUNC:
             strcpy(escopoTraducaoAtual, "global");
-            // Restaura o Return Address ($ra) e volta pro chamador caso atinja fim da função sem return
-            asmPrint("%s $ra, $fp, 1\n", nomeInstrucaoAssembly(lwd));
-            asmPrint("%s $ra\n", nomeInstrucaoAssembly(jr));
+            if (!ehFuncaoMain(quad->op1) && !funcaoPossuiReturn(quad->op1)) {
+                asmPrint("%s $ra, $fp, 1\n", nomeInstrucaoAssembly(lwd));
+                asmPrint("%s $ra\n", nomeInstrucaoAssembly(jr));
+            }
             return 1;
 
 
@@ -644,7 +675,7 @@ static int traduzirQuadrupla(const quadrupla* quad) {
     return 0;
 }
 
-static int contarInstrucoesAssembly(const quadrupla* quad) {
+static int contarInstrucoesAssembly(const quadrupla* quad, const char* funcaoAtual) {
     QuadruplaOp op = operadorQuadrupla(quad->opr);
 
     switch (op) {
@@ -673,13 +704,19 @@ static int contarInstrucoesAssembly(const quadrupla* quad) {
             return 2; // addi $sp + swd argumento
 
         case Q_FUNC:
-            return 2; // swd $ra + addi $sp, $fp, 2
+            return ehFuncaoMain(quad->op2) ? 1 : 2;
 
         case Q_ENDFUNC:
-            return 2; // lwd $ra + jr
+            if (ehFuncaoMain(quad->op1))
+                return 0;
+            if (funcaoPossuiReturn(quad->op1))
+                return 0;
+            return 2;
 
         case Q_RETURN:
-            return operandoValido(quad->op1) ? 1 : 0; // move $rf (se houver)
+            if (ehFuncaoMain(funcaoAtual))
+                return operandoValido(quad->op1) ? 1 : 0;
+            return operandoValido(quad->op1) ? 3 : 2;
 
         case Q_ALLOCAMEMVAR:
             return escopoEhGlobal(quad->op1) ? 0 : 1;
@@ -709,6 +746,7 @@ static int contarInstrucoesAssembly(const quadrupla* quad) {
 
 static void mapearLabelsParaLinhas(const quadList* listaQuadruplas) {
     const quadList* atual;
+    char funcaoAtual[128] = "global";
     
     /* Inicia em 2 porque as instruções 'nop' e 'j main' vão ocupar as linhas 0 e 1 */
     int linhaAtual = 2; 
@@ -721,12 +759,17 @@ static void mapearLabelsParaLinhas(const quadList* listaQuadruplas) {
         if (op == Q_LABEL) {
             adicionarLabel(atual->quad.op1, linhaAtual);
         } else if (op == Q_FUNC) {
-            if (atual->quad.op2 != NULL)
+            if (atual->quad.op2 != NULL) {
                 adicionarLabel(atual->quad.op2, linhaAtual);
+                strncpy(funcaoAtual, atual->quad.op2, sizeof(funcaoAtual) - 1);
+                funcaoAtual[sizeof(funcaoAtual) - 1] = '\0';
+            }
+        } else if (op == Q_ENDFUNC) {
+            strcpy(funcaoAtual, "global");
         }
 
         /* Incrementa de acordo com as instruções assembly REAIS que serão geradas */
-        linhaAtual += contarInstrucoesAssembly(&atual->quad);
+        linhaAtual += contarInstrucoesAssembly(&atual->quad, funcaoAtual);
     }
 }
 
@@ -738,6 +781,7 @@ void traduzirQuadruplasParaAssembly(const quadList* listaQuadruplas) {
     liberarMapaRegistradores();
     liberarMapaEscoposVariaveis();
     strcpy(escopoTraducaoAtual, "global");
+    listaQuadruplasAtual = listaQuadruplas;
     mapearLabelsParaLinhas(listaQuadruplas);
 
     arquivoSaidaAssembly = fopen(ARQUIVO_SAIDA_ASM, "w");
