@@ -13,8 +13,29 @@
 
     void yyerror(ParserContext *ctx, const char *s);
 
-#ifdef _WIN32
+#if defined(_MSC_VER)
 #define STRTOK_REENTRANT(str, delim, saveptr) strtok_s((str), (delim), (saveptr))
+#elif defined(__MINGW32__) || defined(__MINGW64__)
+static char *cminus_strtok_r(char *str, const char *delim, char **saveptr) {
+    char *inicio;
+
+    if (str != NULL)
+        *saveptr = str;
+    if (*saveptr == NULL || **saveptr == '\0')
+        return NULL;
+
+    inicio = *saveptr;
+    while (**saveptr != '\0' && strchr(delim, **saveptr) == NULL)
+        (*saveptr)++;
+    if (**saveptr != '\0') {
+        **saveptr = '\0';
+        (*saveptr)++;
+    } else {
+        *saveptr = NULL;
+    }
+    return inicio;
+}
+#define STRTOK_REENTRANT(str, delim, saveptr) cminus_strtok_r((str), (delim), (saveptr))
 #else
 #define STRTOK_REENTRANT(str, delim, saveptr) strtok_r((str), (delim), (saveptr))
 #endif

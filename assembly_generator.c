@@ -422,11 +422,11 @@ static int traduzirQuadrupla(const quadrupla* quad) {
             asmPrint("%s\n", nomeInstrucaoAssembly(hlt));
             return 1;
 
-        case Q_LABEL:
+        case Q_LABEL: {
             int linha = buscarLinhaLabel(quad->op1);
             adicionarLabel(quad->op1, linha);
-
             return 1;
+        }
 
         case Q_ADD:
             rd = mapearParaRegistradorGeral(quad->op3);
@@ -555,8 +555,9 @@ static int traduzirQuadrupla(const quadrupla* quad) {
                 asmPrint("%s $rf\n", nomeInstrucaoAssembly(in));
             }
             else if (strcmp(quad->op1, "output") == 0) {
-                asmPrint("%s $ro\n", nomeInstrucaoAssembly(pop));
+                asmPrint("%s $ro, $sp, 0\n", nomeInstrucaoAssembly(lwd));
                 asmPrint("%s $ro\n", nomeInstrucaoAssembly(out));
+                asmPrint("%s $sp, $sp, 1\n", nomeInstrucaoAssembly(subi));
             }
             else {
                 int nParams = quad->op2 ? atoi(quad->op2) : 0;
@@ -690,7 +691,7 @@ static int contarInstrucoesAssembly(const quadrupla* quad) {
             if (strcmp(quad->op1, "input") == 0)
                 return 1;
             if (strcmp(quad->op1, "output") == 0)
-                return 2;
+                return 3;
 
             {
                 int nParams = quad->op2 ? atoi(quad->op2) : 0;

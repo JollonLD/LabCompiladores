@@ -64,8 +64,9 @@ lwd $fp, $fp, 0
 addi $sp, $fp, 4
 addi $sp, $sp, 1
 swd $rf, $sp, 0
-pop $ro
+lwd $ro, $sp, 0
 out $ro
+subi $sp, $sp, 1
 lwd $ra, $fp, 1
 jr $ra
 hlt
