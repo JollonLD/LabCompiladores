@@ -9,6 +9,8 @@ int fat(int n)
 void main(void)
 {
     int x;
-    x = fat(5);
+    int a;
+    a = input();
+    x = fat(a);
     output(x);
 }

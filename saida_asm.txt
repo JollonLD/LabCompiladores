@@ -30,7 +30,10 @@ lwd $ra, $fp, 1
 jr $ra
 addi $sp, $fp, 2
 addi $sp, $sp, 1
-li $r9, 5
+addi $sp, $sp, 1
+in $rf
+swd $rf $fp 3
+lwd $r9 $fp 3
 addi $sp, $sp, 1
 swd $r9, $sp, 0
 addi $sp, $sp, 1
@@ -43,7 +46,7 @@ swd $rf, $fp, 2
 jal 2
 move $sp, $fp
 lwd $fp, $fp, 0
-addi $sp, $fp, 3
+addi $sp, $fp, 4
 swd $rf $fp 2
 lwd $r10 $fp 2
 addi $sp, $sp, 1
