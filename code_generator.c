@@ -177,6 +177,22 @@ static char* assignVetor(char* indice, char* vetor){
     return temp3;
 }
 
+static char* carregarElementoVetor(char* indice, char* vetor) {
+    char* endereco;
+    char* valor;
+
+    endereco = assignVetor(indice, vetor);
+    if (endereco == NULL)
+        return NULL;
+
+    valor = novoTemporario();
+    if (valor == NULL)
+        return NULL;
+
+    emitirQuadrupla("LOADVET", funcaoAtual, endereco, valor);
+    return valor;
+}
+
 // Inicializa a cabeça da lista
 static void inicializaListaVars(VarList* cabeca) {
     if (cabeca == NULL) return;
@@ -357,11 +373,19 @@ static void liberaListaConsts(ConstList* cabeca) {
 }
 
 static int ehTemporario(const char* nome) {
+    size_t i;
+
     if (nome == NULL)
         return 0;
 
-    if (nome[0] == 't')
+  /* Temporarios gerados: t0, t1, t2, ... (nao confundir com variavel "t") */
+    if (nome[0] == 't' && nome[1] != '\0') {
+        for (i = 1; nome[i] != '\0'; i++) {
+            if (nome[i] < '0' || nome[i] > '9')
+                return 0;
+        }
         return 1;
+    }
 
     /* Resultado de chamada de funcao no estado atual do gerador. */
     if (strcmp(nome, "$rf") == 0)
@@ -439,7 +463,7 @@ static char* resolverOperandoCond(TreeNode* no) {
     if (no->nodekind == VARK) {
         if (no->kind.var.varKind == KIND_ARRAY && no->child[0] != NULL) {
             char* indice = gerarExpressao(no->child[0]);
-            return assignVetor(indice, no->kind.var.attr.name);
+            return carregarElementoVetor(indice, no->kind.var.attr.name);
         }
 
         return carregarOuReusarTemp(no->kind.var.attr.name);
@@ -548,10 +572,9 @@ static char* gerarExpressao(TreeNode* no) {
     } else if (no->nodekind == VARK) {
         // Acesso a variável ou array
         if (no->kind.var.varKind == KIND_ARRAY && no->child[0] != NULL) {
-            // Acesso a array com índice
             char* indice = gerarExpressao(no->child[0]);
             char* vetor = no->kind.var.attr.name;
-            temp = assignVetor(indice, vetor);
+            temp = carregarElementoVetor(indice, vetor);
 
             return temp;
         } else {
@@ -671,7 +694,12 @@ static void gerarComando(TreeNode* no) {
                             TreeNode* parametro = noIdentificador->child[0];
                             while (parametro != NULL) {
                                 if (parametro->nodekind == STMTK && parametro->child[0] != NULL) {
-                                    emitirQuadrupla("ARG", parametro->child[0]->kind.var.attr.name, funcaoAtual, "_");
+                                    TreeNode* noParam = parametro->child[0];
+                                    if (noParam->kind.var.varKind == KIND_ARRAY) {
+                                        emitirQuadrupla("ALLOCAMEMVET", funcaoAtual,
+                                                         noParam->kind.var.attr.name, "-1");
+                                    }
+                                    emitirQuadrupla("ARG", noParam->kind.var.attr.name, funcaoAtual, "_");
                                 }
                                 parametro = parametro->sibling;
                             }
@@ -756,10 +784,9 @@ static void gerarComandoExpressao(TreeNode* no) {
                             if (no->child[1]->nodekind == VARK &&
                                 no->child[1]->kind.var.varKind == KIND_ARRAY &&
                                 no->child[1]->child[0] != NULL) {
-                                char* temporario = novoTemporario();
+                                char* temporario = carregarOuReusarTemp(valor);
                                 if (temporario == NULL)
                                     return;
-                                emitirQuadrupla("LOADVET", funcaoAtual, valor, temporario);
                                 emitirQuadrupla("STOREVAR", temporario, no->child[0]->kind.var.attr.name, funcaoAtual);
                                 invalidarTempVariavel(no->child[0]->kind.var.attr.name);
                             } else {

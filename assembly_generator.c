@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 #define ARQUIVO_SAIDA_ASM "saida_asm.txt"
 
@@ -20,11 +21,24 @@ typedef struct MapaRegistrador {
     struct MapaRegistrador* prox;
 } MapaRegistrador;
 
+typedef enum {
+    VAR_SIMPLES,
+    VAR_VETOR,
+    VAR_VETOR_PARAM
+} TipoVariavel;
+
 typedef struct VariavelEscopo {
     char* nome;
     int deslocamento;
+    TipoVariavel tipo;
+    int tamanho;
     struct VariavelEscopo* prox;
 } VariavelEscopo;
+
+typedef struct VetorGlobalInit {
+    int deslocamento;
+    struct VetorGlobalInit* prox;
+} VetorGlobalInit;
 
 typedef struct EscopoVariavel {
     char* nomeEscopo;
@@ -36,12 +50,16 @@ typedef struct EscopoVariavel {
 static LabelLinha* listaLabels = NULL;
 static MapaRegistrador* mapaRegistradores = NULL;
 static EscopoVariavel* listaEscoposVariaveis = NULL;
+static VetorGlobalInit* listaInitsVetoresGlobais = NULL;
+static int totalInstrucoesInitsGlobais = 0;
 static int proximoRegistradorGeral = 4;
 static char escopoTraducaoAtual[128] = "global";
 static FILE* arquivoSaidaAssembly = NULL;
 static const quadList* listaQuadruplasAtual = NULL;
 
 static int ehQuadrupla(const char* opr, const char* esperado);
+static int escopoEhGlobal(const char* nomeEscopo);
+static const char* mapearParaRegistradorGeral(const char* operando);
 
 static int funcaoPossuiReturn(const char* nomeFunc) {
     const quadList* p;
@@ -136,6 +154,84 @@ static void liberarMapaEscoposVariaveis(void) {
     listaEscoposVariaveis = NULL;
 }
 
+static void liberarInitsVetoresGlobais(void) {
+    VetorGlobalInit* atual = listaInitsVetoresGlobais;
+
+    while (atual != NULL) {
+        VetorGlobalInit* prox = atual->prox;
+        free(atual);
+        atual = prox;
+    }
+
+    listaInitsVetoresGlobais = NULL;
+    totalInstrucoesInitsGlobais = 0;
+}
+
+static void coletarInitsVetoresGlobais(const quadList* listaQuadruplas) {
+    const quadList* atual;
+    int proximoGlobal = 0;
+
+    liberarInitsVetoresGlobais();
+
+    for (atual = listaQuadruplas; atual != NULL; atual = atual->prox) {
+        if (escopoEhGlobal(atual->quad.op1)) {
+            if (ehQuadrupla(atual->quad.opr, "ALLOCAMEMVAR")) {
+                proximoGlobal++;
+                continue;
+            }
+        }
+
+        if (!ehQuadrupla(atual->quad.opr, "ALLOCAMEMVET"))
+            continue;
+        if (!escopoEhGlobal(atual->quad.op1))
+            continue;
+
+        {
+            int tamanho = atual->quad.op3 ? atoi(atual->quad.op3) : 0;
+            VetorGlobalInit* novo;
+
+            if (tamanho <= 0)
+                continue;
+
+            novo = (VetorGlobalInit*)malloc(sizeof(VetorGlobalInit));
+            if (novo == NULL)
+                continue;
+
+            novo->deslocamento = proximoGlobal;
+            novo->prox = listaInitsVetoresGlobais;
+            listaInitsVetoresGlobais = novo;
+
+            proximoGlobal += 1 + tamanho;
+            totalInstrucoesInitsGlobais += 2;
+        }
+    }
+}
+
+static void emitirInitsVetoresGlobais(void) {
+    VetorGlobalInit* atual;
+    int indiceInit = 0;
+
+    for (atual = listaInitsVetoresGlobais; atual != NULL; atual = atual->prox) {
+        char nomeReg[16];
+        const char* reg;
+
+        snprintf(nomeReg, sizeof(nomeReg), "_gvet%d", indiceInit++);
+        reg = mapearParaRegistradorGeral(nomeReg);
+        asmPrint("li %s, %d\n", reg, atual->deslocamento + 1);
+        asmPrint("swd %s $zero %d\n", reg, atual->deslocamento);
+    }
+}
+
+static void emitirInitDescritorVetorLocal(int deslocamento) {
+    char nomeReg[16];
+    const char* reg;
+
+    snprintf(nomeReg, sizeof(nomeReg), "_lvet%d", deslocamento);
+    reg = mapearParaRegistradorGeral(nomeReg);
+    asmPrint("addi %s, $fp, %d\n", reg, deslocamento + 1);
+    asmPrint("swd %s $fp %d\n", reg, deslocamento);
+}
+
 static int escopoEhGlobal(const char* nomeEscopo) {
     return nomeEscopo == NULL || strcmp(nomeEscopo, "global") == 0;
 }
@@ -209,8 +305,49 @@ static int inserirVariavelNoEscopo(const char* nomeEscopo, const char* nomeVaria
     }
 
     novaVariavel->deslocamento = escopo->proximoDeslocamento++;
+    novaVariavel->tipo = VAR_SIMPLES;
+    novaVariavel->tamanho = 0;
     novaVariavel->prox = escopo->variaveis;
     escopo->variaveis = novaVariavel;
+    return 1;
+}
+
+static int inserirVetorNoEscopo(const char* nomeEscopo, const char* nomeVetor, int tamanho) {
+    EscopoVariavel* escopo;
+    VariavelEscopo* variavel;
+    VariavelEscopo* novoVetor;
+
+    if (nomeEscopo == NULL || *nomeEscopo == '\0' || nomeVetor == NULL || *nomeVetor == '\0')
+        return 0;
+
+    escopo = buscarEscopoVariavel(nomeEscopo);
+    if (escopo == NULL)
+        escopo = adicionarEscopoVariavel(nomeEscopo);
+    if (escopo == NULL)
+        return 0;
+
+    for (variavel = escopo->variaveis; variavel != NULL; variavel = variavel->prox) {
+        if (strcmp(variavel->nome, nomeVetor) == 0)
+            return 1;
+    }
+
+    novoVetor = (VariavelEscopo*)malloc(sizeof(VariavelEscopo));
+    if (novoVetor == NULL)
+        return 0;
+
+    novoVetor->nome = duplicarTexto(nomeVetor);
+    if (novoVetor->nome == NULL) {
+        free(novoVetor);
+        return 0;
+    }
+
+    novoVetor->deslocamento = escopo->proximoDeslocamento++;
+    novoVetor->tipo = (tamanho < 0) ? VAR_VETOR_PARAM : VAR_VETOR;
+    novoVetor->tamanho = tamanho;
+    if (tamanho > 0)
+        escopo->proximoDeslocamento += tamanho;
+    novoVetor->prox = escopo->variaveis;
+    escopo->variaveis = novoVetor;
     return 1;
 }
 
@@ -239,6 +376,32 @@ static const char* baseParaEscopo(const char* nomeEscopo) {
     if (escopoEhGlobal(nomeEscopo))
         return "$zero";
     return "$fp";
+}
+
+static const char* baseParaVariavel(const char* nomeEscopo, const char* nomeVariavel) {
+    EscopoVariavel* escopo;
+    VariavelEscopo* variavel;
+
+    if (nomeVariavel == NULL || *nomeVariavel == '\0')
+        return "$fp";
+
+    escopo = buscarEscopoVariavel(nomeEscopo);
+    if (escopo != NULL) {
+        for (variavel = escopo->variaveis; variavel != NULL; variavel = variavel->prox) {
+            if (strcmp(variavel->nome, nomeVariavel) == 0)
+                return baseParaEscopo(nomeEscopo);
+        }
+    }
+
+    escopo = buscarEscopoVariavel("global");
+    if (escopo != NULL) {
+        for (variavel = escopo->variaveis; variavel != NULL; variavel = variavel->prox) {
+            if (strcmp(variavel->nome, nomeVariavel) == 0)
+                return "$zero";
+        }
+    }
+
+    return baseParaEscopo(nomeEscopo);
 }
 
 static void adicionarLabel(const char* nome, int linha) {
@@ -505,14 +668,14 @@ static int traduzirQuadrupla(const quadrupla* quad) {
         case Q_LOADVAR:
             variavel = buscarVariavelNoEscopo(quad->op1, quad->op2);
             rd = mapearParaRegistradorGeral(quad->op3);
-            base = baseParaEscopo(quad->op1);
+            base = baseParaVariavel(quad->op1, quad->op2);
             asmPrint("lwd %s %s %d\n", rd, base, variavel ? variavel->deslocamento : 0);
             return 1;
 
         case Q_STOREVAR:
             variavel = buscarVariavelNoEscopo(quad->op3, quad->op2);
             rs = mapearParaRegistradorGeral(quad->op1);
-            base = baseParaEscopo(quad->op3);
+            base = baseParaVariavel(quad->op3, quad->op2);
             asmPrint("swd %s %s %d\n", rs, base, variavel ? variavel->deslocamento : 0);
             return 1;
 
@@ -547,26 +710,35 @@ static int traduzirQuadrupla(const quadrupla* quad) {
             return 1;
             
         case Q_ALLOCAMEMVET: {
-            int tamanho = atoi(quad->op3);
-            inserirVariavelNoEscopo(quad->op1, quad->op2);
-            if (!escopoEhGlobal(quad->op1)) {
-                EscopoVariavel* esc = buscarEscopoVariavel(quad->op1);
-                if (esc) esc->proximoDeslocamento += (tamanho - 1);
-                asmPrint("%s $sp, $sp, %d\n", nomeInstrucaoAssembly(addi), tamanho);
-            } else {
-                EscopoVariavel* esc = buscarEscopoVariavel("global");
-                if (esc) esc->proximoDeslocamento += (tamanho - 1);
-            }
+            int tamanho = quad->op3 ? atoi(quad->op3) : 0;
+            const VariavelEscopo* vet;
+
+            inserirVetorNoEscopo(quad->op1, quad->op2, tamanho);
+
+            if (tamanho < 0)
+                return 1;
+
+            if (escopoEhGlobal(quad->op1))
+                return 1;
+
+            asmPrint("%s $sp, $sp, %d\n", nomeInstrucaoAssembly(addi), tamanho);
+            vet = buscarVariavelNoEscopo(quad->op1, quad->op2);
+            if (vet != NULL)
+                emitirInitDescritorVetorLocal(vet->deslocamento);
             return 1;
         }
 
         case Q_LOADVET: {
-            asmPrint("# TODO: Instrucao LOADVET\n"); 
+            rd = mapearParaRegistradorGeral(quad->op3);
+            rs = mapearParaRegistradorGeral(quad->op2);
+            asmPrint("lwd %s %s 0\n", rd, rs);
             return 1;
         }
 
         case Q_STOREVET: {
-            asmPrint("# TODO: Instrucao STOREVET\n"); 
+            rs = mapearParaRegistradorGeral(quad->op1);
+            rt = mapearParaRegistradorGeral(quad->op2);
+            asmPrint("swd %s %s 0\n", rs, rt);
             return 1;
         }
         
@@ -721,8 +893,15 @@ static int contarInstrucoesAssembly(const quadrupla* quad, const char* funcaoAtu
         case Q_ALLOCAMEMVAR:
             return escopoEhGlobal(quad->op1) ? 0 : 1;
 
-        case Q_ALLOCAMEMVET:
-            return escopoEhGlobal(quad->op1) ? 0 : 1;
+        case Q_ALLOCAMEMVET: {
+            int tamanho = quad->op3 ? atoi(quad->op3) : 0;
+
+            if (tamanho < 0)
+                return 0;
+            if (escopoEhGlobal(quad->op1))
+                return 0;
+            return 3;
+        }
 
         case Q_CALL:
             if (strcmp(quad->op1, "input") == 0)
@@ -748,8 +927,8 @@ static void mapearLabelsParaLinhas(const quadList* listaQuadruplas) {
     const quadList* atual;
     char funcaoAtual[128] = "global";
     
-    /* Inicia em 2 porque as instruções 'nop' e 'j main' vão ocupar as linhas 0 e 1 */
-    int linhaAtual = 2; 
+    /* nop + inits globais de vetores + j main */
+    int linhaAtual = 2 + totalInstrucoesInitsGlobais;
 
     liberarLabels();
 
@@ -782,6 +961,7 @@ void traduzirQuadruplasParaAssembly(const quadList* listaQuadruplas) {
     liberarMapaEscoposVariaveis();
     strcpy(escopoTraducaoAtual, "global");
     listaQuadruplasAtual = listaQuadruplas;
+    coletarInitsVetoresGlobais(listaQuadruplas);
     mapearLabelsParaLinhas(listaQuadruplas);
 
     arquivoSaidaAssembly = fopen(ARQUIVO_SAIDA_ASM, "w");
@@ -791,6 +971,7 @@ void traduzirQuadruplasParaAssembly(const quadList* listaQuadruplas) {
     }
 
     asmPrint("%s\n", nomeInstrucaoAssembly(nop));
+    emitirInitsVetoresGlobais();
     linhaMain = buscarLinhaLabel("main");
     if (linhaMain >= 0)
         asmPrint("%s %d\n", nomeInstrucaoAssembly(j), linhaMain);
@@ -806,6 +987,7 @@ void traduzirQuadruplasParaAssembly(const quadList* listaQuadruplas) {
     liberarMapaRegistradores();
     liberarMapaEscoposVariaveis();
     liberarLabels();
+    liberarInitsVetoresGlobais();
 
     printf("\n*** CODIGO ASSEMBLY ***\n");
     printf("Arquivo gerado: %s\n", ARQUIVO_SAIDA_ASM);
