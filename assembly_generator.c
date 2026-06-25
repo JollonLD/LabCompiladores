@@ -436,6 +436,28 @@ static int buscarLinhaLabel(const char* nome) {
     return -1;
 }
 
+/* R30 = $fp e R31 = $ro: exclusivos do hardware, nao usar como GPR */
+static int registradorExclusivo(int indice) {
+    return indice == 30 || indice == 31;
+}
+
+static int alocarIndiceRegistradorGeral(void) {
+    int indice;
+
+    indice = proximoRegistradorGeral;
+    while (indice <= 63 && registradorExclusivo(indice))
+        indice++;
+
+    if (indice > 63)
+        return 63;
+
+    proximoRegistradorGeral = indice + 1;
+    while (proximoRegistradorGeral <= 63 && registradorExclusivo(proximoRegistradorGeral))
+        proximoRegistradorGeral++;
+
+    return indice;
+}
+
 static int ehNumero(const char* texto) {
     size_t i;
 
@@ -486,11 +508,7 @@ static const char* mapearParaRegistradorGeral(const char* operando) {
         return operando;
     }
 
-    indice = proximoRegistradorGeral;
-    if (indice > 63)
-        indice = 63;
-    else
-        proximoRegistradorGeral++;
+    indice = alocarIndiceRegistradorGeral();
 
     novo->indice = indice;
     snprintf(novo->nomeAsm, sizeof(novo->nomeAsm), "$r%d", indice);
