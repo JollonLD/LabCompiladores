@@ -185,20 +185,37 @@ static int codificarTipoI20(unsigned int opcode, unsigned int campoAlto, unsigne
     return 1;
 }
 
-static int codificarBranch(unsigned int opcode, unsigned int rs, unsigned int rt, int alvo,
+/*
+ * Branch tipo I20 (hardware Processador_Jonas):
+ *   destino = PC_atual + 1 + offset
+ *   offset  = PC_destino - (PC_atual + 1)
+ * O terceiro operando do assembly e o PC destino (0-indexed), nao linha do listing.
+ * [19:14] = rt, [13:0] = offset (14 bits unsigned, salto para frente).
+ */
+static int codificarBranch(unsigned int opcode, unsigned int rs, unsigned int rt, int pcDestino,
                            int enderecoPc, unsigned int* instrucao, char* erro, size_t tamanhoErro,
                            const char* linha) {
     int offset;
-    unsigned int imm20;
+    unsigned int offset14;
+    unsigned int word;
 
-    offset = alvo - (enderecoPc + 1);
+    offset = pcDestino - (enderecoPc + 1);
     if (offset < 0 || offset > (int)IM14_MASK) {
-        snprintf(erro, tamanhoErro, "deslocamento de branch invalido (%d) em %s", offset, linha);
+        snprintf(erro, tamanhoErro,
+                 "branch PC=%d -> %d: offset %d fora de [0,%u] em %s",
+                 enderecoPc, pcDestino, offset, IM14_MASK, linha);
         return -1;
     }
 
-    imm20 = (rt << 14) | montarIm14((unsigned int)offset);
-    *instrucao = (opcode << 26) | (rs << 20) | imm20;
+    offset14 = montarIm14((unsigned int)offset);
+    word = (opcode << 26) | (rs << 20) | (rt << 14) | offset14;
+
+    if (((word >> 20) & 0x3Fu) != rs || ((word >> 14) & 0x3Fu) != rt) {
+        snprintf(erro, tamanhoErro, "branch com rs/rt inconsistentes em %s", linha);
+        return -1;
+    }
+
+    *instrucao = word;
     return 1;
 }
 

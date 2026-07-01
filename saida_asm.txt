@@ -1,158 +1,72 @@
 nop
-li $r4, 1
-swd $r4 $zero 0
-j 98
+j 39
 swd $ra, $fp, 1
 addi $sp, $fp, 2
 addi $sp, $sp, 1
 addi $sp, $sp, 1
-addi $sp, $sp, 1
-addi $sp, $sp, 1
-addi $sp, $sp, 1
-addi $sp, $sp, 1
-lwd $r5 $fp 3
-swd $r5 $fp 7
+lwd $r4 $fp 3
+li $r5, 0
+bne $r4, $r5, 13
 lwd $r6 $fp 2
-add $r7, $r5, $r6
-lwd $r8 $r7 0
-swd $r8 $fp 6
-li $r9, 1
-add $r10, $r5, $r9
-swd $r10 $fp 5
-lwd $r11 $fp 5
-lwd $r12 $fp 4
-bge $r11, $r12, 35
-add $r13, $r11, $r6
-lwd $r14 $r13 0
-lwd $r15 $fp 6
-bge $r14, $r15, 32
-add $r16, $r11, $r6
-lwd $r17 $r16 0
-swd $r17 $fp 6
-swd $r11 $fp 7
-add $r18, $r11, $r9
-swd $r18 $fp 5
-j 21
-lwd $r19 $fp 7
-move $rf, $r19
+move $rf, $r6
 lwd $ra, $fp, 1
 jr $ra
-swd $ra, $fp, 1
-addi $sp, $fp, 2
+lwd $r7 $fp 3
 addi $sp, $sp, 1
+swd $r7, $sp, 0
+lwd $r8 $fp 2
+div $r9, $r8, $r7
+mult $r10, $r9, $r7
+sub $r11, $r8, $r10
 addi $sp, $sp, 1
-addi $sp, $sp, 1
-addi $sp, $sp, 1
-addi $sp, $sp, 1
-lwd $r20 $fp 3
-swd $r20 $fp 5
-lwd $r21 $fp 5
-li $r22, 1
-lwd $r23 $fp 4
-sub $r24, $r23, $r22
-bge $r21, $r24, 96
-addi $sp, $sp, 1
-lwd $r25 $fp 2
-addi $sp, $sp, 1
-swd $r25, $sp, 0
-addi $sp, $sp, 1
-swd $r21, $sp, 0
-addi $sp, $sp, 1
-swd $r23, $sp, 0
+swd $r11, $sp, 0
 addi $sp, $sp, 1
 swd $fp, $sp, 0
 move $fp, $sp
 subi $sp, $sp, 1
 lwd $rf, $sp, 0
 subi $sp, $sp, 1
-swd $rf, $fp, 4
-lwd $rf, $sp, 0
-subi $sp, $sp, 1
 swd $rf, $fp, 3
 lwd $rf, $sp, 0
 subi $sp, $sp, 1
 swd $rf, $fp, 2
-jal 4
+jal 2
 move $sp, $fp
 lwd $fp, $fp, 0
-addi $sp, $fp, 8
-swd $rf $fp 6
-lwd $r26 $fp 6
-lwd $r27 $fp 2
-add $r28, $r26, $r27
-lwd $r29 $r28 0
-swd $r29 $fp 7
-lwd $r30 $fp 5
-add $r31, $r30, $r27
-lwd $r32 $r31 0
-add $r33, $r26, $r27
-swd $r32 $r33 0
-lwd $r34 $fp 7
-add $r35, $r30, $r27
-swd $r34 $r35 0
-li $r36, 1
-add $r37, $r30, $r36
-swd $r37 $fp 5
-j 48
+addi $sp, $fp, 4
+move $rf, $rf
 lwd $ra, $fp, 1
 jr $ra
 addi $sp, $fp, 2
 addi $sp, $sp, 1
-li $r38, 0
-swd $r38 $fp 2
-lwd $r39 $fp 2
-li $r40, 10
-bge $r39, $r40, 114
+addi $sp, $sp, 1
 in $rf
-lwd $r41 $fp 2
-lwd $r42 $zero 0
-add $r43, $r41, $r42
-swd $rf $r43 0
-li $r44, 1
-add $r45, $r41, $r44
-swd $r45 $fp 2
-j 102
+swd $rf $fp 2
+in $rf
+swd $rf $fp 3
+lwd $r12 $fp 2
 addi $sp, $sp, 1
-swd $r42, $sp, 0
-li $r46, 0
+swd $r12, $sp, 0
+lwd $r13 $fp 3
 addi $sp, $sp, 1
-swd $r46, $sp, 0
-li $r47, 10
-addi $sp, $sp, 1
-swd $r47, $sp, 0
+swd $r13, $sp, 0
 addi $sp, $sp, 1
 swd $fp, $sp, 0
 move $fp, $sp
 subi $sp, $sp, 1
 lwd $rf, $sp, 0
 subi $sp, $sp, 1
-swd $rf, $fp, 4
-lwd $rf, $sp, 0
-subi $sp, $sp, 1
 swd $rf, $fp, 3
 lwd $rf, $sp, 0
 subi $sp, $sp, 1
 swd $rf, $fp, 2
-jal 39
+jal 2
 move $sp, $fp
 lwd $fp, $fp, 0
-addi $sp, $fp, 3
-li $r48, 0
-swd $r48 $fp 2
-lwd $r49 $fp 2
-li $r50, 10
-bge $r49, $r50, 157
-lwd $r51 $zero 0
-add $r52, $r49, $r51
-lwd $r53 $r52 0
+addi $sp, $fp, 4
 addi $sp, $sp, 1
-swd $r53, $sp, 0
+swd $rf, $sp, 0
 lwd $ro, $sp, 0
 out $ro
 subi $sp, $sp, 1
-li $r54, 1
-lwd $r55 $fp 2
-add $r56, $r55, $r54
-swd $r56 $fp 2
-j 141
 hlt

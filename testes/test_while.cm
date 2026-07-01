@@ -1,13 +1,15 @@
+int x[3];
 void main(void)
 {
 	int i;
-	int soma;
-
 	i = 0;
-	soma = 0;
-	while (i < 5) {
-		soma = soma + i;
+	while (i < 3) {
+		x[i] = input();
 		i = i + 1;
 	}
-	output(soma);
+	i = 0;
+	while (i < 3) {
+		output(x[i]);
+		i = i + 1;
+	}
 }

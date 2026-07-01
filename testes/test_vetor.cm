@@ -1,14 +1,17 @@
 int vet[4];
 
+void soma (int v[], int i) {
+	v[i] = v[i] + 10;
+
+}
+
 void main(void)
 {
 	vet[0] = 1;
 	vet[1] = 2;
 	vet[2] = 3;
 	vet[3] = 4;
-	output(vet[0]);
+	soma(vet, 1);
 	output(vet[1]);
-	output(vet[2]);
-	output(vet[3]);
 
 }
